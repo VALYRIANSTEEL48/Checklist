@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0E0C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Checklist">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Checklist</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- STATUS HEADER -->
+  <header class="status-bar">
+    <div class="status-top">
+      <div class="brand">
+        <span class="brand-mark">//</span>CHECKLIST
+      </div>
+      <button id="btn-settings" class="icon-btn" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.4 7.4 0 000-2l2.1-1.6a.5.5 0 00.1-.6l-2-3.4a.5.5 0 00-.6-.2l-2.5 1a7.6 7.6 0 00-1.7-1L14.4 2a.5.5 0 00-.5-.4h-4a.5.5 0 00-.5.4l-.4 2.6a7.6 7.6 0 00-1.7 1l-2.5-1a.5.5 0 00-.6.2l-2 3.4a.5.5 0 00.1.6L4.6 11a7.4 7.4 0 000 2l-2.1 1.6a.5.5 0 00-.1.6l2 3.4a.5.5 0 00.6.2l2.5-1a7.6 7.6 0 001.7 1l.4 2.6a.5.5 0 00.5.4h4a.5.5 0 00.5-.4l.4-2.6a7.6 7.6 0 001.7-1l2.5 1a.5.5 0 00.6-.2l2-3.4a.5.5 0 00-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
+      </button>
+    </div>
+
+    <div class="readout-panel corner-bracket">
+      <div class="readout-main">
+        <div class="readout-block">
+          <div class="readout-label">MAIN STREAK</div>
+          <div class="readout-value" id="main-streak-value">000</div>
+        </div>
+        <div class="readout-divider"></div>
+        <div class="readout-block">
+          <div class="readout-label" id="tracking-date-label">TODAY</div>
+          <div class="readout-sub" id="tracking-date-value">--</div>
+        </div>
+      </div>
+      <div class="today-progress">
+        <div class="today-progress-fill" id="today-progress-fill"></div>
+      </div>
+      <div class="history-tape" id="history-tape"></div>
+    </div>
+  </header>
+
+  <!-- CHECKLIST -->
+  <main id="checklist-main">
+    <section class="task-group" id="group-scheduled">
+      <h2 class="group-title"><span class="tick"></span>SCHEDULED</h2>
+      <ul class="task-list" id="list-scheduled"></ul>
+      <p class="empty-note" id="empty-scheduled">NO SCHEDULED TASKS</p>
+    </section>
+
+    <section class="task-group" id="group-anytime">
+      <h2 class="group-title"><span class="tick"></span>ANYTIME</h2>
+      <ul class="task-list" id="list-anytime"></ul>
+      <p class="empty-note" id="empty-anytime">NO ANYTIME TASKS</p>
+    </section>
+
+    <section class="task-group" id="group-paused" hidden>
+      <h2 class="group-title muted"><span class="tick"></span>PAUSED</h2>
+      <ul class="task-list" id="list-paused"></ul>
+    </section>
+  </main>
+
+  <button id="btn-add" class="fab" aria-label="Add task">
+    <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+  </button>
+
+</div>
+
+<!-- ADD / EDIT TASK SHEET -->
+<div class="sheet-overlay" id="task-overlay">
+  <div class="sheet corner-bracket" id="task-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3 id="task-sheet-title">NEW TASK</h3>
+      <button class="icon-btn" id="btn-close-task"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+
+    <div class="sheet-body">
+      <label class="field-label">TASK NAME</label>
+      <input type="text" id="input-task-name" class="text-input" placeholder="e.g. Rack weapon, log PT" maxlength="60">
+
+      <label class="field-label">RECURRENCE</label>
+      <div class="segmented" id="seg-recurrence">
+        <button class="seg-btn active" data-val="repeating">REPEATING</button>
+        <button class="seg-btn" data-val="oneoff">ONE-OFF</button>
+      </div>
+
+      <label class="field-label">TIMING</label>
+      <div class="segmented" id="seg-timing">
+        <button class="seg-btn active" data-val="anytime">ANY TIME</button>
+        <button class="seg-btn" data-val="scheduled">SCHEDULED</button>
+      </div>
+
+      <div id="repeat-days-wrap">
+        <label class="field-label">REPEAT ON</label>
+        <div class="weekday-picker" id="weekday-picker">
+          <button data-day="0">S</button>
+          <button data-day="1">M</button>
+          <button data-day="2">T</button>
+          <button data-day="3">W</button>
+          <button data-day="4">T</button>
+          <button data-day="5">F</button>
+          <button data-day="6">S</button>
+        </div>
+      </div>
+
+      <div id="scheduled-fields" hidden>
+        <label class="field-label" id="date-field-label">DATE</label>
+        <div class="calendar-panel corner-bracket" id="calendar-panel">
+          <div class="cal-header">
+            <button type="button" id="cal-prev" class="icon-btn small">‹</button>
+            <div id="cal-month-label">--</div>
+            <button type="button" id="cal-next" class="icon-btn small">›</button>
+          </div>
+          <div class="cal-weekdays">
+            <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+
+        <div class="row-2">
+          <div>
+            <label class="field-label">TIME</label>
+            <input type="time" id="input-time" class="text-input">
+          </div>
+          <div>
+            <label class="field-label">DURATION (MIN)</label>
+            <input type="number" id="input-duration" class="text-input" placeholder="optional" min="0" step="5">
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-save-task">SAVE TASK</button>
+      <button class="btn-danger-outline" id="btn-delete-task" hidden>DELETE TASK</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS SHEET -->
+<div class="sheet-overlay" id="settings-overlay">
+  <div class="sheet corner-bracket" id="settings-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3>SETTINGS</h3>
+      <button class="icon-btn" id="btn-close-settings"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+
+      <label class="field-label">DAILY RESET TIME</label>
+      <input type="time" id="input-reset-time" class="text-input">
+      <p class="hint-text">Tasks reset and the day is scored at this time. Default 00:00.</p>
+
+      <label class="field-label">ACCENT COLOR</label>
+      <div class="swatch-row" id="swatch-row">
+        <button class="swatch" data-color="#D98E2B" style="background:#D98E2B"></button>
+        <button class="swatch" data-color="#6B9E5E" style="background:#6B9E5E"></button>
+        <button class="swatch" data-color="#5E8FB0" style="background:#5E8FB0"></button>
+        <button class="swatch" data-color="#B5432E" style="background:#B5432E"></button>
+        <button class="swatch" data-color="#B0A5D1" style="background:#B0A5D1"></button>
+        <input type="color" id="custom-color" class="swatch custom-swatch" value="#D98E2B">
+      </div>
+
+      <label class="field-label">PANEL TONE</label>
+      <div class="segmented" id="seg-tone">
+        <button class="seg-btn active" data-val="black">BLACKOUT</button>
+        <button class="seg-btn" data-val="olive">OLIVE DRAB</button>
+        <button class="seg-btn" data-val="slate">GUNMETAL</button>
+      </div>
+
+      <label class="field-label">DATA</label>
+      <button class="btn-secondary" id="btn-export">EXPORT DATA</button>
+      <button class="btn-secondary" id="btn-import">IMPORT DATA</button>
+      <input type="file" id="file-import" accept="application/json" hidden>
+      <button class="btn-danger-outline" id="btn-reset-all">WIPE ALL DATA</button>
+
+      <p class="hint-text version-tag">CHECKLIST v1.0 — LOCAL DEVICE STORAGE ONLY</p>
+    </div>
+  </div>
+</div>
+
+<!-- TASK ACTION SHEET (long-press menu) -->
+<div class="sheet-overlay" id="action-overlay">
+  <div class="sheet action-sheet corner-bracket" id="action-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body">
+      <div id="action-task-name" class="action-task-name">TASK</div>
+      <button class="btn-secondary" id="action-edit">EDIT</button>
+      <button class="btn-secondary" id="action-pause">PAUSE</button>
+      <button class="btn-danger-outline" id="action-delete">DELETE</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
