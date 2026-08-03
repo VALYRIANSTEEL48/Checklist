@@ -16,14 +16,59 @@
 </head>
 <body>
 
+<!-- ============================================================
+     DASHBOARD (home / module select)
+     ============================================================ -->
+<div id="view-dashboard" class="view">
+  <div class="dash-header">
+    <div class="brand"><span class="brand-mark">//</span>COMMAND</div>
+    <button id="btn-dash-settings" class="icon-btn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.4 7.4 0 000-2l2.1-1.6a.5.5 0 00.1-.6l-2-3.4a.5.5 0 00-.6-.2l-2.5 1a7.6 7.6 0 00-1.7-1L14.4 2a.5.5 0 00-.5-.4h-4a.5.5 0 00-.5.4l-.4 2.6a7.6 7.6 0 00-1.7 1l-2.5-1a.5.5 0 00-.6.2l-2 3.4a.5.5 0 00.1.6L4.6 11a7.4 7.4 0 000 2l-2.1 1.6a.5.5 0 00-.1.6l2 3.4a.5.5 0 00.6.2l2.5-1a7.6 7.6 0 001.7 1l.4 2.6a.5.5 0 00.5.4h4a.5.5 0 00.5-.4l.4-2.6a7.6 7.6 0 001.7-1l2.5 1a.5.5 0 00.6-.2l2-3.4a.5.5 0 00-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
+    </button>
+  </div>
+  <div class="dash-main">
+    <div class="dash-lede">SELECT MODULE</div>
+
+    <button class="tile corner-bracket" id="tile-checklist">
+      <span class="tile-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M9 16.2L4.8 12l-1.4 1.4L9 19 20.6 7.4 19.2 6z"/></svg>
+      </span>
+      <span class="tile-body">
+        <div class="tile-title">CHECKLIST</div>
+        <div class="tile-sub" id="dash-checklist-stat">STREAK 000</div>
+      </span>
+      <span class="tile-chevron">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
+      </span>
+    </button>
+
+    <button class="tile corner-bracket" id="tile-workout">
+      <span class="tile-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg>
+      </span>
+      <span class="tile-body">
+        <div class="tile-title">WORKOUTS</div>
+        <div class="tile-sub" id="dash-workout-stat">0/7 THIS WEEK</div>
+      </span>
+      <span class="tile-chevron">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
+      </span>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     CHECKLIST VIEW
+     ============================================================ -->
+<div id="view-checklist" class="view" hidden>
 <div id="app">
 
-  <!-- STATUS HEADER -->
   <header class="status-bar">
     <div class="status-top">
-      <div class="brand">
-        <span class="brand-mark">//</span>CHECKLIST
-      </div>
+      <button id="btn-checklist-back" class="icon-btn" aria-label="Back to dashboard">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <div class="brand"><span class="brand-mark">//</span>CHECKLIST</div>
       <button id="btn-settings" class="icon-btn" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.4 7.4 0 000-2l2.1-1.6a.5.5 0 00.1-.6l-2-3.4a.5.5 0 00-.6-.2l-2.5 1a7.6 7.6 0 00-1.7-1L14.4 2a.5.5 0 00-.5-.4h-4a.5.5 0 00-.5.4l-.4 2.6a7.6 7.6 0 00-1.7 1l-2.5-1a.5.5 0 00-.6.2l-2 3.4a.5.5 0 00.1.6L4.6 11a7.4 7.4 0 000 2l-2.1 1.6a.5.5 0 00-.1.6l2 3.4a.5.5 0 00.6.2l2.5-1a7.6 7.6 0 001.7 1l.4 2.6a.5.5 0 00.5.4h4a.5.5 0 00.5-.4l.4-2.6a7.6 7.6 0 001.7-1l2.5 1a.5.5 0 00.6-.2l2-3.4a.5.5 0 00-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
       </button>
@@ -48,7 +93,6 @@
     </div>
   </header>
 
-  <!-- CHECKLIST -->
   <main id="checklist-main">
     <section class="task-group" id="group-scheduled">
       <h2 class="group-title"><span class="tick"></span>SCHEDULED</h2>
@@ -73,8 +117,45 @@
   </button>
 
 </div>
+</div>
 
-<!-- ADD / EDIT TASK SHEET -->
+<!-- ============================================================
+     WORKOUT VIEW
+     ============================================================ -->
+<div id="view-workout" class="view" hidden>
+  <div class="top-strip" id="wk-top-strip">
+    <button id="btn-workout-back" class="icon-btn" aria-label="Back to dashboard">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="top-title" id="wk-top-title">WORKOUTS</div>
+    <button id="btn-workout-settings" class="icon-btn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.4 7.4 0 000-2l2.1-1.6a.5.5 0 00.1-.6l-2-3.4a.5.5 0 00-.6-.2l-2.5 1a7.6 7.6 0 00-1.7-1L14.4 2a.5.5 0 00-.5-.4h-4a.5.5 0 00-.5.4l-.4 2.6a7.6 7.6 0 00-1.7 1l-2.5-1a.5.5 0 00-.6.2l-2 3.4a.5.5 0 00.1.6L4.6 11a7.4 7.4 0 000 2l-2.1 1.6a.5.5 0 00-.1.6l2 3.4a.5.5 0 00.6.2l2.5-1a7.6 7.6 0 001.7 1l.4 2.6a.5.5 0 00.5.4h4a.5.5 0 00.5-.4l.4-2.6a7.6 7.6 0 001.7-1l2.5 1a.5.5 0 00.6-.2l2-3.4a.5.5 0 00-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
+    </button>
+  </div>
+
+  <div id="workout-screen"></div>
+
+  <div class="wk-tabbar" id="wk-tabbar">
+    <button class="wk-tab-btn" data-tab="home">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <span>TODAY</span>
+    </button>
+    <button class="wk-tab-btn" data-tab="history">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <span>HISTORY</span>
+    </button>
+    <button class="wk-tab-btn" data-tab="manage">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg>
+      <span>MANAGE</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     SHARED SHEETS / MODALS
+     ============================================================ -->
+
+<!-- ADD / EDIT TASK SHEET (checklist) -->
 <div class="sheet-overlay" id="task-overlay">
   <div class="sheet corner-bracket" id="task-sheet">
     <div class="sheet-handle"></div>
@@ -144,7 +225,7 @@
   </div>
 </div>
 
-<!-- SETTINGS SHEET -->
+<!-- MERGED SETTINGS SHEET -->
 <div class="sheet-overlay" id="settings-overlay">
   <div class="sheet corner-bracket" id="settings-sheet">
     <div class="sheet-handle"></div>
@@ -154,9 +235,16 @@
     </div>
     <div class="sheet-body">
 
-      <label class="field-label">DAILY RESET TIME</label>
+      <label class="field-label">CHECKLIST — DAILY RESET TIME</label>
       <input type="time" id="input-reset-time" class="text-input">
       <p class="hint-text">Tasks reset and the day is scored at this time. Default 00:00.</p>
+
+      <label class="field-label">WORKOUTS — WEEKLY TARGET</label>
+      <div class="stepper" style="margin-top:4px;">
+        <button type="button" id="settings-target-minus">−</button>
+        <div class="stepper-value" id="settings-target-value">7</div>
+        <button type="button" id="settings-target-plus">+</button>
+      </div>
 
       <label class="field-label">ACCENT COLOR</label>
       <div class="swatch-row" id="swatch-row">
@@ -175,18 +263,18 @@
         <button class="seg-btn" data-val="slate">GUNMETAL</button>
       </div>
 
-      <label class="field-label">DATA</label>
-      <button class="btn-secondary" id="btn-export">EXPORT DATA</button>
-      <button class="btn-secondary" id="btn-import">IMPORT DATA</button>
+      <label class="field-label">DATA (CHECKLIST + WORKOUTS)</label>
+      <button class="btn-secondary" id="btn-export">EXPORT BACKUP</button>
+      <button class="btn-secondary" id="btn-import">IMPORT BACKUP</button>
       <input type="file" id="file-import" accept="application/json" hidden>
       <button class="btn-danger-outline" id="btn-reset-all">WIPE ALL DATA</button>
 
-      <p class="hint-text version-tag">CHECKLIST v1.0 — LOCAL DEVICE STORAGE ONLY</p>
+      <p class="hint-text version-tag">CHECKLIST v2.0 — LOCAL DEVICE STORAGE ONLY</p>
     </div>
   </div>
 </div>
 
-<!-- TASK ACTION SHEET (long-press menu) -->
+<!-- TASK ACTION SHEET (checklist long-press menu) -->
 <div class="sheet-overlay" id="action-overlay">
   <div class="sheet action-sheet corner-bracket" id="action-sheet">
     <div class="sheet-handle"></div>
@@ -199,8 +287,93 @@
   </div>
 </div>
 
+<!-- WORKOUT: weekly target editor (bottom sheet) -->
+<div class="sheet-overlay" id="wk-target-overlay">
+  <div class="sheet corner-bracket" id="wk-target-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3>WEEKLY TARGET</h3>
+      <button class="icon-btn" id="btn-close-target"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint-text" style="margin-bottom:16px;">Set how many workouts you want to complete each week.</p>
+      <div class="stepper">
+        <button type="button" id="wk-target-minus">−</button>
+        <div class="stepper-value" id="wk-target-value">7</div>
+        <button type="button" id="wk-target-plus">+</button>
+      </div>
+      <button class="btn-primary" id="btn-target-done" style="margin-top:0;">DONE</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKOUT: exercise note editor (bottom sheet) -->
+<div class="sheet-overlay" id="wk-note-overlay">
+  <div class="sheet corner-bracket" id="wk-note-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3>EXERCISE NOTE</h3>
+      <button class="icon-btn" id="btn-close-note"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint-text" id="wk-note-exercise-name">Exercise</p>
+      <textarea id="wk-note-input" class="text-input" maxlength="200" placeholder="Add a note (e.g. felt strong, increase weight next time...)"></textarea>
+      <p class="hint-text">Max 200 characters</p>
+      <button class="btn-primary" id="btn-note-done">DONE</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKOUT: month calendar modal -->
+<div class="modal-overlay" id="wk-month-overlay">
+  <div class="modal month-modal" id="wk-month-modal">
+    <div class="modal-header">
+      <h3 id="wk-month-title">MONTH</h3>
+      <button class="icon-btn" id="btn-close-month"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="cal-weekdays"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+    <div class="cal-grid" id="wk-month-grid"></div>
+    <div style="margin-top:16px;">
+      <div class="stat-line"><span class="lbl">DAYS WITH WORKOUTS</span><span class="val" id="wk-month-days">0</span></div>
+      <div class="stat-line"><span class="lbl">TOTAL WORKOUTS</span><span class="val" id="wk-month-count">0</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- WORKOUT: discard confirmation -->
+<div class="modal-overlay" id="wk-discard-overlay">
+  <div class="modal" id="wk-discard-modal">
+    <div class="modal-header"><h3>DISCARD WORKOUT?</h3></div>
+    <p class="modal-hint">Your progress will not be saved.</p>
+    <div class="modal-actions">
+      <button class="modal-btn-neutral" id="btn-discard-cancel">CANCEL</button>
+      <button class="modal-btn-danger" id="btn-discard-confirm">DISCARD</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKOUT: history detail modal -->
+<div class="modal-overlay" id="wk-detail-overlay">
+  <div class="modal" id="wk-detail-modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div>
+        <h3 id="wk-detail-title">Workout</h3>
+        <p id="wk-detail-sub"></p>
+      </div>
+      <button class="icon-btn" id="btn-close-detail"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div id="wk-detail-body"></div>
+    <div style="margin-top:8px;">
+      <div class="stat-line"><span class="lbl">TOTAL EXERCISES</span><span class="val" id="wk-detail-ex-count">0</span></div>
+      <div class="stat-line"><span class="lbl">TOTAL SETS</span><span class="val" id="wk-detail-set-count">0</span></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<script src="app.js"></script>
+<script src="checklist.js"></script>
+<script src="workout.js"></script>
+<script src="shell.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 {
   "name": "Checklist",
   "short_name": "Checklist",
-  "description": "Daily operational checklist and streak tracker",
+  "description": "Daily checklist with streak tracking, plus a workout tracker — one command dashboard",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
