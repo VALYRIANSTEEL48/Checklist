@@ -365,8 +365,32 @@
     <div id="wk-detail-body"></div>
     <div style="margin-top:8px;">
       <div class="stat-line"><span class="lbl">TOTAL EXERCISES</span><span class="val" id="wk-detail-ex-count">0</span></div>
-      <div class="stat-line"><span class="lbl">TOTAL SETS</span><span class="val" id="wk-detail-set-count">0</span></div>
+      <div class="stat-line"><span class="lbl">LOGGED ENTRIES</span><span class="val" id="wk-detail-set-count">0</span></div>
     </div>
+  </div>
+</div>
+
+<!-- PROGRAM: day-assignment sheet (which session slot runs on this weekday) -->
+<div class="sheet-overlay" id="wk-day-assign-overlay">
+  <div class="sheet corner-bracket" id="wk-day-assign-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3 id="wk-day-assign-title">ASSIGN DAY</h3>
+      <button class="icon-btn" id="btn-close-day-assign"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body" id="wk-day-assign-body"></div>
+  </div>
+</div>
+
+<!-- PROGRAM: session slot / block editor (big modal) -->
+<div class="modal-overlay" id="wk-slot-editor-overlay">
+  <div class="modal big-modal" id="wk-slot-editor-modal">
+    <div class="modal-header">
+      <h3 id="wk-slot-editor-title">SESSION TEMPLATE</h3>
+      <button class="icon-btn" id="btn-close-slot-editor"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div id="wk-slot-editor-body"></div>
+    <button class="btn-primary" id="btn-slot-editor-done" style="margin-top:14px;">DONE</button>
   </div>
 </div>
 

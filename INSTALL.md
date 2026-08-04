@@ -69,23 +69,60 @@ module, tap the back arrow in its header to return.
   Scheduled tasks always sort by time automatically.
 
 **Workouts**
-- **Today** tab: weekly target ring (tap to change the target), this
-  week's calendar strip, Start New Workout, recent workouts, and monthly
-  progress.
-- Starting a workout: pick a template → pick a variant → log weight/reps
-  per set (inputs commit when you tap away, not on every keystroke).
-  Complete or discard from there; discarding with logged sets asks for
-  confirmation.
+- **Today** tab: if no program is active, this is the freeform view — weekly
+  target ring (tap to change it), this week's calendar strip, Start New
+  Workout, recent workouts, monthly progress.
+- If a **program is active**, the top card becomes your programmed session
+  for today instead: week number, phase, session name, a preview of the
+  exercises with this week's targets, and a Begin Session button. Rest days
+  show a Recovery card. A small link lets you log a freeform workout
+  instead any time.
+- Starting a workout: pick a template → pick a variant → log per set
+  (inputs commit when you tap away, not on every keystroke). Complete or
+  discard from there; discarding with logged sets asks for confirmation.
 - **History** tab: past workouts grouped by month; tap one for the full
-  set-by-set breakdown.
-- **Manage** tab: edit or delete templates, or build a new one from
-  scratch (name, icon, one or more variants, each with its own exercise
-  list).
+  breakdown. Program-driven sessions are tagged.
+- **Manage** tab: two sections — **Training Programs** (build/edit/
+  activate/delete multi-week programs) and **Quick-Start Workouts** (the
+  original freeform templates, untouched).
+
+**Training Programs** — for real periodized plans (a 12-week block, RPE
+that ramps weekly, exercises that change partway through, running/ruck/
+interval days mixed in), not just quick ad-hoc sessions:
+- A program is built from **phases** (e.g. "Weeks 1–4: Base," "Weeks 5–8:
+  Peak"). Each phase has its own weekly schedule — tap a day to assign it
+  a session template or mark it rest — and its own session templates.
+- Each exercise/activity in a session template gets a **progression rule**:
+  Fixed (same every week), Ramp (a start value + a step per week — you'll
+  see a live preview of what every week resolves to as you set it), or
+  Custom (hand-set a value for each week individually). This is what lets
+  a 12-week program come from a handful of session templates instead of
+  84 individually-written days.
+- Four exercise/activity types are supported per item: **Strength**
+  (sets/reps/RPE), **Cardio** (duration/distance/effort), **Interval**
+  (rounds, work/rest seconds), and **Ruck** (distance/load/duration). You
+  can mix types within one session.
+- Moving into a new phase resets progression to that phase's own starting
+  values — that's how "RPE ramps within a block, then exercises change for
+  the next block" works without hand-editing every week.
+- Only one program can be active at a time. Activating a new one doesn't
+  delete the others — they stay listed as drafts you can reactivate later.
+  Deleting a program keeps any workouts you already logged from it in your
+  history; they just lose the link back to a program that no longer
+  exists.
+- **Programs are calendar-locked, not adherence-based** — if you skip
+  Tuesday's session, Wednesday's is still Wednesday's, the plan doesn't
+  reshuffle around missed days.
+- Weight is always something you log, never something the program dictates
+  — it prescribes reps and target RPE, and you pick the load that hits
+  that RPE for those reps (autoregulation), same as most RPE-based
+  programs work.
 
 **Settings** (gear icon, reachable from the dashboard or either module)
 covers both apps in one place: checklist reset time, workout weekly
 target, accent color, panel tone, and export/import/wipe — which now
-back up and restore **both** datasets together in one JSON file.
+back up and restore **both** datasets together in one JSON file
+(including all programs).
 
 ## A few things worth knowing
 
