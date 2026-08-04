@@ -55,6 +55,14 @@ offline after the first load.
 
 ## Using it
 
+**A note on exercise/activity fields:** every exercise now starts from a
+composable set of fields (Sets, Reps, Weight, RPE, Rest Between Sets,
+Duration, Distance, Rounds, Work/Rest Interval) rather than a locked
+"strength / cardio / interval / ruck" type — add or remove whichever
+fields a given exercise actually needs (e.g. Sets + Distance for a
+farmer carry, Sets + Duration for a plank). This applies in both the
+freeform builder and program session editor.
+
 **Dashboard** — two tiles, Checklist and Workouts, each showing a live
 stat (main streak / this week's workout count). Tap a tile to enter that
 module, tap the back arrow in its header to return.
@@ -123,6 +131,12 @@ covers both apps in one place: checklist reset time, workout weekly
 target, accent color, panel tone, and export/import/wipe — which now
 back up and restore **both** datasets together in one JSON file
 (including all programs).
+
+**Exercise library** — any exercise you name gets remembered automatically
+(no separate save step). Start typing a name anywhere and matching past
+exercises show up to tap instead of retyping — picking one carries over
+its fields and last-used numbers, which you can still adjust.
+
 
 ## A few things worth knowing
 

@@ -62,7 +62,7 @@ const defaultTemplates = [
 
 /* ---------- STATE ---------- */
 function defaultState() {
-  return { templates: JSON.parse(JSON.stringify(defaultTemplates)), history: [], weeklyTarget: 7, programs: [], activeProgramId: null };
+  return { templates: JSON.parse(JSON.stringify(defaultTemplates)), history: [], weeklyTarget: 7, programs: [], activeProgramId: null, exerciseLibrary: [] };
 }
 let state = load();
 
@@ -77,7 +77,8 @@ function load() {
       history: Array.isArray(parsed.history) ? parsed.history : [],
       weeklyTarget: typeof parsed.weeklyTarget === "number" ? parsed.weeklyTarget : 7,
       programs: Array.isArray(parsed.programs) ? parsed.programs : [],
-      activeProgramId: parsed.activeProgramId || null
+      activeProgramId: parsed.activeProgramId || null,
+      exerciseLibrary: Array.isArray(parsed.exerciseLibrary) ? parsed.exerciseLibrary : []
     };
   } catch (e) {
     console.error("Failed to load workout state, resetting.", e);
@@ -87,12 +88,66 @@ function load() {
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
+/* ---------- EXERCISE LIBRARY ----------
+   A flat, auto-growing list of exercises the user has ever named, used to
+   power name-as-you-type suggestions. Saving is automatic and silent —
+   there is no separate "manage library" step. */
+function upsertLibraryEntry(name, fields, values) {
+  name = (name || "").trim();
+  if (!name) return;
+  const key = name.toLowerCase();
+  const snapshot = {};
+  (fields || []).forEach((k) => { if (values[k] != null && values[k] !== "") snapshot[k] = values[k]; });
+  const existing = state.exerciseLibrary.find((e) => e.name.toLowerCase() === key);
+  if (existing) {
+    existing.name = name;
+    existing.fields = sortFields(fields || existing.fields);
+    existing.values = Object.assign({}, existing.values, snapshot);
+  } else {
+    state.exerciseLibrary.push({ name, fields: sortFields(fields || []), values: snapshot });
+  }
+  save();
+}
+function searchLibrary(query) {
+  query = (query || "").trim().toLowerCase();
+  if (!query) return [];
+  return state.exerciseLibrary
+    .filter((e) => e.name.toLowerCase().includes(query))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 8);
+}
+
 /* ---------- PROGRAM ENGINE (pure) ----------
    A program is authored as rules (phases -> weekly pattern + per-exercise
    progression formulas), not as a flat list of sessions. A concrete day's
    session is *resolved* on demand from those rules; nothing is
    pre-materialized until the user actually logs it (at which point it
    becomes a normal, permanent history entry like any freeform workout). */
+
+/* ---------- FIELD SYSTEM ----------
+   Every exercise/activity "block" (in a program) or "exercise" (freeform)
+   is just a name plus a chosen set of composable fields — there is no
+   fixed "kind" that locks in a specific input layout. SETS turns the
+   block into a repeated-row grid; without SETS it's a single logged
+   entry. Fields in PER_SET_CAPABLE become a column per set when SETS is
+   active, and a single input otherwise. Fields in ALWAYS_SINGLE (rest
+   between sets, rounds, work/rest interval) are never per-set. */
+const FIELD_DEFS = {
+  sets:            { label: "SETS", roundTo: 1 },
+  reps:            { label: "REPS", roundTo: 1 },
+  weight:          { label: "WEIGHT (LBS)", roundTo: 5 },
+  rpe:             { label: "RPE", roundTo: 0.5 },
+  restBetweenSets: { label: "REST BETWEEN SETS (SEC)", roundTo: 5 },
+  duration:        { label: "DURATION (MIN)", roundTo: 1 },
+  distance:        { label: "DISTANCE", roundTo: 0.1, hasUnit: true },
+  rounds:          { label: "ROUNDS", roundTo: 1 },
+  workSec:         { label: "WORK INTERVAL (SEC)", roundTo: 5 },
+  restSec:         { label: "REST INTERVAL (SEC)", roundTo: 5 }
+};
+const FIELD_ORDER = ["sets","reps","weight","rpe","restBetweenSets","duration","distance","rounds","workSec","restSec"];
+const PER_SET_CAPABLE = ["reps","weight","rpe","duration","distance"];
+const ALWAYS_SINGLE = ["restBetweenSets","rounds","workSec","restSec"];
+function sortFields(fields) { return FIELD_ORDER.filter((k) => fields.includes(k)); }
 
 function resolveProgressionValue(field, weekInPhase) {
   if (!field) return null;
@@ -129,27 +184,55 @@ function programWeekForDate(program, dateStr) {
 function phaseForWeek(program, week) {
   return program.phases.find((p) => week >= p.startWeek && week <= p.endWeek) || null;
 }
-function resolveBlock(block, weekInPhase) {
-  const out = { id: block.id, name: block.name, kind: block.kind, note: block.note || "" };
-  if (block.kind === "strength") {
-    out.sets = resolveProgressionValue(block.sets, weekInPhase);
-    out.reps = resolveProgressionValue(block.reps, weekInPhase);
-    out.rpe = resolveProgressionValue(block.rpe, weekInPhase);
-  } else if (block.kind === "cardio") {
-    out.durationMin = resolveProgressionValue(block.durationMin, weekInPhase);
-    out.distance = resolveProgressionValue(block.distance, weekInPhase);
-    out.distanceUnit = block.distanceUnit || "mi";
-    out.effort = resolveProgressionValue(block.effort, weekInPhase);
-  } else if (block.kind === "interval") {
-    out.rounds = resolveProgressionValue(block.rounds, weekInPhase);
-    out.workSec = resolveProgressionValue(block.workSec, weekInPhase);
-    out.restSec = resolveProgressionValue(block.restSec, weekInPhase);
-  } else if (block.kind === "ruck") {
-    out.durationMin = resolveProgressionValue(block.durationMin, weekInPhase);
-    out.distance = resolveProgressionValue(block.distance, weekInPhase);
-    out.distanceUnit = block.distanceUnit || "mi";
-    out.loadLbs = resolveProgressionValue(block.loadLbs, weekInPhase);
+
+// Migrates a block saved under the old kind-locked schema (strength /
+// cardio / interval / ruck with hardcoded sub-fields) into the new
+// composable fields[] schema. Already-new blocks pass through unchanged.
+// This runs lazily on read so existing saved programs keep working.
+function normalizeBlock(b) {
+  if (b.fields) {
+    b.distanceUnit = b.distanceUnit || "mi";
+    if (b.reps) b.reps.amrap = !!b.reps.amrap;
+    return b;
   }
+  const out = { id: b.id, name: b.name, note: b.note || "", distanceUnit: b.distanceUnit || "mi", fields: [] };
+  if (b.kind === "strength") {
+    out.fields = ["sets","reps","weight","rpe"];
+    out.weight = defaultProgField(0, 5);
+    out.sets = b.sets || defaultProgField(3);
+    out.reps = b.reps || defaultProgField(10); out.reps.amrap = false;
+    out.rpe = b.rpe || defaultProgField(7, 0.5);
+  } else if (b.kind === "cardio") {
+    out.fields = ["duration","distance","rpe"];
+    out.duration = b.durationMin || defaultProgField(20);
+    out.distance = b.distance || defaultProgField(0, 0.1);
+    out.rpe = b.effort || defaultProgField(5);
+  } else if (b.kind === "interval") {
+    out.fields = ["rounds","workSec","restSec"];
+    out.rounds = b.rounds || defaultProgField(6);
+    out.workSec = b.workSec || defaultProgField(60);
+    out.restSec = b.restSec || defaultProgField(30);
+  } else if (b.kind === "ruck") {
+    out.fields = ["duration","distance","weight"];
+    out.duration = b.durationMin || defaultProgField(45);
+    out.distance = b.distance || defaultProgField(3, 0.1);
+    out.weight = b.loadLbs || defaultProgField(30, 5);
+  } else {
+    out.fields = ["sets","reps"];
+    out.sets = defaultProgField(3); out.reps = defaultProgField(10);
+  }
+  return out;
+}
+
+function resolveBlock(block, weekInPhase) {
+  normalizeBlock(block);
+  const out = { id: block.id, name: block.name, note: block.note || "", fields: sortFields(block.fields), distanceUnit: block.distanceUnit || "mi" };
+  const amrap = !!(block.reps && block.reps.amrap);
+  out.amrap = amrap;
+  block.fields.forEach((key) => {
+    if (key === "reps" && amrap) { out.reps = "AMRAP"; return; }
+    out[key] = resolveProgressionValue(block[key], weekInPhase);
+  });
   return out;
 }
 function resolveSessionForDate(program, dateStr) {
@@ -171,6 +254,41 @@ function resolveSessionForDate(program, dateStr) {
 function getActiveProgram() {
   if (!state.activeProgramId) return null;
   return state.programs.find((p) => p.id === state.activeProgramId) || null;
+}
+
+// Builds a loggable exercise (used in the active-workout screen) from a
+// name + active fields + concrete values. Shared by program sessions
+// (values = resolved-from-progression numbers) and freeform workouts
+// (values = the template's plain saved numbers) so both flows produce the
+// exact same loggable shape.
+function buildLoggable(name, fields, values, opts) {
+  opts = opts || {};
+  const hasSets = fields.includes("sets");
+  const perSetKeys = hasSets ? fields.filter((k) => PER_SET_CAPABLE.includes(k)) : [];
+  const singleKeys = fields.filter((k) => ALWAYS_SINGLE.includes(k) || (!hasSets && PER_SET_CAPABLE.includes(k)));
+  const out = {
+    id: opts.id || uid(), name, note: "", fields: sortFields(fields),
+    distanceUnit: values.distanceUnit || "mi", ampap: !!opts.ampap, hasSets,
+    targets: opts.targets || null
+  };
+  if (hasSets) {
+    const setCount = Math.max(1, Number(values.sets) || 1);
+    out.sets = Array.from({ length: setCount }, () => {
+      const row = {};
+      perSetKeys.forEach((k) => { row[k] = (k === "reps" && opts.ampap) ? "" : (values[k] != null ? String(values[k]) : ""); });
+      return row;
+    });
+  }
+  out.log = {};
+  singleKeys.forEach((k) => { out.log[k] = values[k] != null ? String(values[k]) : ""; });
+  return out;
+}
+
+// Migrates a freeform template exercise from the old {defaultSets,
+// defaultReps} shape to the new composable {fields:[], ...} shape.
+function normalizeTemplateExercise(ex) {
+  if (ex.fields) return ex;
+  return { id: ex.id, name: ex.name, fields: ["sets","reps","weight"], sets: ex.defaultSets || 3, reps: ex.defaultReps || 10, weight: 0 };
 }
 
 /* ---------- DATE UTILITIES ---------- */
@@ -294,6 +412,15 @@ function monthlyWorkoutCount(monthKey) {
 function completedExercisesOf(workout) {
   if (!workout || !workout.exercises) return [];
   return workout.exercises.map((ex) => {
+    if (ex.fields) {
+      // new field-driven shape
+      if (ex.hasSets) {
+        const perSetKeys = ex.fields.filter((k) => PER_SET_CAPABLE.includes(k));
+        return { ...ex, sets: (ex.sets || []).filter((s) => perSetKeys.some((k) => s[k] !== "" && s[k] !== undefined)) };
+      }
+      return ex;
+    }
+    // legacy kind-based shape (pre-field-system)
     const kind = ex.kind || "strength";
     if (kind === "strength") {
       return { ...ex, kind, sets: (ex.sets || []).filter((s) => s.weight !== "" && s.reps !== "" && s.weight !== undefined && s.reps !== undefined) };
@@ -301,6 +428,10 @@ function completedExercisesOf(workout) {
     return { ...ex, kind };
   }).filter((ex) => {
     if (!ex.name || !ex.name.trim()) return false;
+    if (ex.fields) {
+      if (ex.hasSets) return (ex.sets || []).length > 0;
+      return ex.log && Object.keys(ex.log).some((k) => ex.log[k] !== "" && ex.log[k] !== undefined);
+    }
     if (ex.kind === "strength") return ex.sets.length > 0;
     if (ex.kind === "interval") return ex.log && ex.log.roundsCompleted !== "" && ex.log.roundsCompleted !== undefined;
     return ex.log && (ex.log.durationMin !== "" || ex.log.distance !== "");
@@ -488,13 +619,9 @@ function startProgramSession(program, resolved) {
 }
 
 function buildLoggableBlock(b) {
-  const base = { id: b.id, name: b.name, kind: b.kind };
-  if (b.kind === "cardio") return { ...base, targetDurationMin: b.durationMin, targetDistance: b.distance, distanceUnit: b.distanceUnit, targetEffort: b.effort, log: { durationMin: "", distance: "", effort: "" } };
-  if (b.kind === "interval") return { ...base, targetRounds: b.rounds, targetWorkSec: b.workSec, targetRestSec: b.restSec, log: { roundsCompleted: "", notes: "" } };
-  if (b.kind === "ruck") return { ...base, targetDurationMin: b.durationMin, targetDistance: b.distance, distanceUnit: b.distanceUnit, targetLoadLbs: b.loadLbs, log: { durationMin: "", distance: "", loadLbs: b.loadLbs != null ? String(b.loadLbs) : "" } };
-  // strength (default)
-  return { ...base, kind: "strength", targetReps: b.reps, targetRPE: b.rpe,
-    sets: Array.from({ length: Math.max(1, b.sets || 1) }, () => ({ reps: b.reps != null ? String(b.reps) : "", weight: "", rpe: "" })) };
+  const amrap = !!b.amrap;
+  const loggable = buildLoggable(b.name, b.fields, b, { id: b.id, ampap: amrap, targets: Object.assign({}, b) });
+  return loggable;
 }
 
 /* ---------- PROGRAM BUILDER SCREEN ---------- */
@@ -508,27 +635,34 @@ function makeDefaultPhase(name, startWeek, endWeek) {
 function defaultProgField(base, roundTo) {
   return { mode: "fixed", base, stepPerWeek: 0, min: null, max: null, roundTo: roundTo || 1, customValues: {} };
 }
-function ensureBlockFields(b) {
-  if (b.kind === "strength") {
-    b.sets = b.sets || defaultProgField(3);
-    b.reps = b.reps || defaultProgField(10);
-    b.rpe = b.rpe || defaultProgField(7, 0.5);
-  } else if (b.kind === "cardio") {
-    b.durationMin = b.durationMin || defaultProgField(20);
-    b.distance = b.distance || defaultProgField(0, 0.1);
-    b.effort = b.effort || defaultProgField(5);
-    b.distanceUnit = b.distanceUnit || "mi";
-  } else if (b.kind === "interval") {
-    b.rounds = b.rounds || defaultProgField(6);
-    b.workSec = b.workSec || defaultProgField(60);
-    b.restSec = b.restSec || defaultProgField(30);
-  } else if (b.kind === "ruck") {
-    b.durationMin = b.durationMin || defaultProgField(45);
-    b.distance = b.distance || defaultProgField(3, 0.1);
-    b.loadLbs = b.loadLbs || defaultProgField(30, 5);
-    b.distanceUnit = b.distanceUnit || "mi";
-  }
-  return b;
+const FIELD_HARD_DEFAULTS = { sets: 3, reps: 10, weight: 0, rpe: 7, restBetweenSets: 90, duration: 20, distance: 1, rounds: 6, workSec: 60, restSec: 30 };
+function hardFieldDefault(key) {
+  return defaultProgField(FIELD_HARD_DEFAULTS[key] != null ? FIELD_HARD_DEFAULTS[key] : 0, (FIELD_DEFS[key] || {}).roundTo || 1);
+}
+// Creates a field's ProgressionField the first time it's needed, seeding it
+// from the session's own "last used" shape for that field if one exists
+// (so a second exercise in the same session starts from a similar ramp
+// instead of a blank default), falling back to a sane hard default.
+function ensureField(block, key, slot) {
+  if (block[key]) { if (key === "reps" && block.reps.amrap == null) block.reps.amrap = false; return block[key]; }
+  const remembered = slot && slot.lastProgDefaults && slot.lastProgDefaults[key];
+  block[key] = remembered ? JSON.parse(JSON.stringify(remembered)) : hardFieldDefault(key);
+  if (key === "reps" && block.reps.amrap == null) block.reps.amrap = false;
+  if (key === "distance") block.distanceUnit = block.distanceUnit || "mi";
+  return block[key];
+}
+function rememberProgDefault(slot, key, field) {
+  if (!slot) return;
+  slot.lastProgDefaults = slot.lastProgDefaults || {};
+  slot.lastProgDefaults[key] = JSON.parse(JSON.stringify(field));
+}
+function addFieldToBlock(block, key, slot) {
+  if (!block.fields.includes(key)) block.fields.push(key);
+  ensureField(block, key, slot);
+}
+function removeFieldFromBlock(block, key) {
+  block.fields = block.fields.filter((f) => f !== key);
+  if (key === "reps" && block.fields.includes("rpe") === false) { /* no-op, kept for clarity */ }
 }
 
 function openProgramBuilder(program) {
@@ -573,8 +707,7 @@ function phaseCardHTML(phase) {
   const slotsHTML = phase.sessionSlots.map((s) => `
     <div class="slot-row">
       <div class="sr-left">
-        <span class="kind-badge">${s.kind.toUpperCase()}</span>
-        <div><div class="sr-name">${escapeHTML(s.name)}</div><div class="sr-meta">${s.blocks.length} block${s.blocks.length !== 1 ? "s" : ""}${s.optional ? " · optional" : ""}</div></div>
+        <div><div class="sr-name">${escapeHTML(s.name)}</div><div class="sr-meta">${s.blocks.length} item${s.blocks.length !== 1 ? "s" : ""}${s.optional ? " · optional" : ""}</div></div>
       </div>
       <div class="sr-actions">
         <button class="icon-btn small" data-edit-slot="${phase.id}:${s.id}">${iconSVG("edit", 16)}</button>
@@ -670,8 +803,9 @@ function openDayAssignSheet(phaseId, dow) {
   const dayLabels = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
   el("wk-day-assign-title").textContent = dayLabels[dow];
   const options = [`<button class="btn-secondary" data-pick-slot="__rest__" style="margin-top:0;">REST DAY</button>`]
-    .concat(phase.sessionSlots.map((s) => `<button class="btn-secondary" data-pick-slot="${s.id}">${escapeHTML(s.name)} <span class="kind-badge" style="margin-left:6px;">${s.kind.toUpperCase()}</span></button>`))
-    .concat([`<button class="btn-primary" data-pick-slot="__new__">+ NEW SESSION TEMPLATE</button>`]);
+    .concat(phase.sessionSlots.map((s) => `<button class="btn-secondary" data-pick-slot="${s.id}">${escapeHTML(s.name)}</button>`))
+    .concat([`<button class="btn-primary" data-pick-slot="__new__">+ NEW SESSION TEMPLATE</button>`,
+      `<button class="btn-secondary" data-pick-slot="__import__">IMPORT FROM QUICK-START TEMPLATE</button>`]);
   el("wk-day-assign-body").innerHTML = options.join("");
   document.querySelectorAll("[data-pick-slot]").forEach((b) => b.onclick = () => pickDaySlot(b.getAttribute("data-pick-slot")));
   openSheet("wk-day-assign-overlay");
@@ -680,18 +814,71 @@ function pickDaySlot(choice) {
   const { phaseId, dow } = daySheetCtx;
   const phase = progBuilder.phases.find((p) => p.id === phaseId);
   const dayEntry = phase.microcycle.days.find((d) => d.dow === dow);
-  closeSheet("wk-day-assign-overlay");
-  if (choice === "__rest__") { dayEntry.slotId = null; renderWorkout(); return; }
+  if (choice === "__rest__") { closeSheet("wk-day-assign-overlay"); dayEntry.slotId = null; renderWorkout(); return; }
   if (choice === "__new__") {
-    const slot = { id: uid(), name: "New Session", kind: "strength", optional: false, blocks: [] };
+    closeSheet("wk-day-assign-overlay");
+    const slot = { id: uid(), name: "New Session", optional: false, blocks: [] };
     phase.sessionSlots.push(slot);
     dayEntry.slotId = slot.id;
     renderWorkout();
     openSlotEditor(phaseId, slot.id);
     return;
   }
+  if (choice === "__import__") {
+    openImportTemplatePicker({ mode: "day", phaseId, dow });
+    return;
+  }
+  closeSheet("wk-day-assign-overlay");
   dayEntry.slotId = choice;
   renderWorkout();
+}
+
+/* ---- import a quick-start (freeform) template's exercises into a program ---- */
+let importCtx = null;
+function openImportTemplatePicker(ctx) {
+  importCtx = ctx;
+  el("wk-day-assign-title").textContent = "IMPORT — CHOOSE WORKOUT";
+  const options = state.templates.map((t) => `<button class="btn-secondary" data-import-template="${t.id}" style="margin-top:${state.templates.indexOf(t) === 0 ? 0 : 10}px;">${escapeHTML(t.name)}</button>`);
+  el("wk-day-assign-body").innerHTML = options.join("") || `<p class="hint-text">No quick-start workouts saved yet.</p>`;
+  document.querySelectorAll("[data-import-template]").forEach((b) => b.onclick = () => showImportVariants(b.getAttribute("data-import-template")));
+  openSheet("wk-day-assign-overlay");
+}
+function showImportVariants(templateId) {
+  const t = state.templates.find((x) => x.id === templateId);
+  el("wk-day-assign-title").textContent = escapeHTML(t.name) + " — CHOOSE VARIANT";
+  const options = t.variants.map((v, i) => `<button class="btn-secondary" data-import-variant="${v.id}" style="margin-top:${i === 0 ? 0 : 10}px;">${escapeHTML(v.name)}</button>`);
+  el("wk-day-assign-body").innerHTML = options.join("");
+  document.querySelectorAll("[data-import-variant]").forEach((b) => b.onclick = () => {
+    completeImport(t, t.variants.find((x) => x.id === b.getAttribute("data-import-variant")));
+  });
+}
+function completeImport(template, variant) {
+  closeSheet("wk-day-assign-overlay");
+  const importedBlocks = variant.exercises.map((ex) => {
+    const norm = normalizeTemplateExercise(ex);
+    const block = { id: uid(), name: norm.name, note: "", fields: norm.fields.slice(), distanceUnit: norm.distanceUnit || "mi" };
+    norm.fields.forEach((k) => {
+      const roundTo = (FIELD_DEFS[k] || {}).roundTo || 1;
+      block[k] = defaultProgField(norm[k] != null ? norm[k] : (FIELD_HARD_DEFAULTS[k] || 0), roundTo);
+      if (k === "reps") block.reps.amrap = false;
+    });
+    return block;
+  });
+  if (importCtx.mode === "slot") {
+    const phase = progBuilder.phases.find((p) => p.id === importCtx.phaseId);
+    const slot = phase.sessionSlots.find((s) => s.id === importCtx.slotId);
+    if (slot) slot.blocks = slot.blocks.concat(importedBlocks);
+    renderWorkout();
+    openSlotEditor(importCtx.phaseId, importCtx.slotId);
+  } else {
+    const phase = progBuilder.phases.find((p) => p.id === importCtx.phaseId);
+    const slot = { id: uid(), name: `${template.name} — ${variant.name}`, optional: false, blocks: importedBlocks };
+    phase.sessionSlots.push(slot);
+    const dayEntry = phase.microcycle.days.find((d) => d.dow === importCtx.dow);
+    dayEntry.slotId = slot.id;
+    renderWorkout();
+  }
+  window.showToast && window.showToast("IMPORTED");
 }
 
 /* ---- session slot / block editor modal ---- */
@@ -708,7 +895,8 @@ function openSlotEditor(phaseId, slotId) {
   renderSlotEditor();
   openModal("wk-slot-editor-overlay");
 }
-function progressionFieldHTML(blockIdx, fieldKey, label, field, phaseWeeks) {
+function progressionFieldHTML(blockIdx, fieldKey, label, field, phaseWeeks, opts) {
+  opts = opts || {};
   const modeBtns = ["fixed","linear","custom"].map((m) =>
     `<button class="${field.mode === m ? "active" : ""}" data-prog-mode="${blockIdx}:${fieldKey}:${m}">${m === "linear" ? "RAMP" : m.toUpperCase()}</button>`).join("");
   let body;
@@ -717,9 +905,11 @@ function progressionFieldHTML(blockIdx, fieldKey, label, field, phaseWeeks) {
   } else if (field.mode === "linear") {
     const vals = [];
     for (let w = 1; w <= phaseWeeks; w++) vals.push(resolveProgressionValue(field, w));
+    const isNeg = (field.stepPerWeek || 0) < 0;
     body = `<div class="prog-inline-row">
       <input type="number" step="any" placeholder="start" value="${field.base}" data-prog-base="${blockIdx}:${fieldKey}">
-      <input type="number" step="any" placeholder="step / wk" value="${field.stepPerWeek}" data-prog-step="${blockIdx}:${fieldKey}">
+      <button type="button" class="prog-sign-btn ${isNeg ? "neg" : ""}" data-prog-sign="${blockIdx}:${fieldKey}" title="Increase or decrease per week">${isNeg ? "−" : "+"}</button>
+      <input type="number" step="any" min="0" placeholder="per wk" value="${Math.abs(field.stepPerWeek || 0)}" data-prog-step="${blockIdx}:${fieldKey}">
     </div>
     <div class="prog-preview">${vals.map((v, i) => `W${i+1}: <b>${v}</b>`).join(" &nbsp; ")}</div>`;
   } else {
@@ -730,41 +920,42 @@ function progressionFieldHTML(blockIdx, fieldKey, label, field, phaseWeeks) {
     }
     body = `<div class="prog-custom-grid">${cells}</div>`;
   }
+  const removeBtn = opts.removable === false ? "" : `<button type="button" class="remove-x" data-remove-field="${blockIdx}:${fieldKey}">×</button>`;
   return `<div class="prog-field">
-    <div class="prog-field-label"><span>${label}</span></div>
+    <div class="prog-field-label"><span>${label}</span>${opts.extraHeader || ""}${removeBtn}</div>
     <div class="prog-mode-toggle">${modeBtns}</div>
     ${body}
   </div>`;
 }
-function blockEditorHTML(b, bIdx, phaseWeeks) {
-  ensureBlockFields(b);
-  const kindSeg = ["strength","cardio","interval","ruck"].map((k) =>
-    `<button class="${b.kind === k ? "active" : ""}" data-block-kind="${bIdx}:${k}">${k.slice(0,4).toUpperCase()}</button>`).join("");
-  let fields = "";
-  if (b.kind === "strength") {
-    fields = progressionFieldHTML(bIdx, "sets", "SETS", b.sets, phaseWeeks)
-      + progressionFieldHTML(bIdx, "reps", "REPS", b.reps, phaseWeeks)
-      + progressionFieldHTML(bIdx, "rpe", "TARGET RPE", b.rpe, phaseWeeks);
-  } else if (b.kind === "cardio") {
-    fields = progressionFieldHTML(bIdx, "durationMin", "DURATION (MIN)", b.durationMin, phaseWeeks)
-      + progressionFieldHTML(bIdx, "distance", `DISTANCE (${(b.distanceUnit||"mi").toUpperCase()})`, b.distance, phaseWeeks)
-      + progressionFieldHTML(bIdx, "effort", "EFFORT (1–10)", b.effort, phaseWeeks);
-  } else if (b.kind === "interval") {
-    fields = progressionFieldHTML(bIdx, "rounds", "ROUNDS", b.rounds, phaseWeeks)
-      + progressionFieldHTML(bIdx, "workSec", "WORK (SEC)", b.workSec, phaseWeeks)
-      + progressionFieldHTML(bIdx, "restSec", "REST (SEC)", b.restSec, phaseWeeks);
-  } else if (b.kind === "ruck") {
-    fields = progressionFieldHTML(bIdx, "durationMin", "DURATION (MIN)", b.durationMin, phaseWeeks)
-      + progressionFieldHTML(bIdx, "distance", `DISTANCE (${(b.distanceUnit||"mi").toUpperCase()})`, b.distance, phaseWeeks)
-      + progressionFieldHTML(bIdx, "loadLbs", "LOAD (LBS)", b.loadLbs, phaseWeeks);
-  }
+function blockEditorHTML(b, bIdx, phaseWeeks, slot) {
+  const activeFields = sortFields(b.fields);
+  const addChips = FIELD_ORDER.filter((k) => !b.fields.includes(k))
+    .map((k) => `<button type="button" class="field-chip" data-add-field="${bIdx}:${k}">+ ${FIELD_DEFS[k].label}</button>`).join("");
+
+  const fieldsHTML = activeFields.map((key) => {
+    ensureField(b, key, slot);
+    if (key === "reps") {
+      const amrap = !!b.reps.amrap;
+      const amrapToggle = `<label class="amrap-toggle"><input type="checkbox" data-amrap-toggle="${bIdx}" ${amrap ? "checked" : ""}> AMRAP</label>`;
+      if (amrap) {
+        return `<div class="prog-field">
+          <div class="prog-field-label"><span>REPS</span>${amrapToggle}<button type="button" class="remove-x" data-remove-field="${bIdx}:reps">×</button></div>
+          <p class="hint-text" style="margin:4px 0 0;">Log actual reps completed each set. RPE isn't tracked for AMRAP.</p>
+        </div>`;
+      }
+      return progressionFieldHTML(bIdx, "reps", "REPS", b.reps, phaseWeeks, { extraHeader: amrapToggle });
+    }
+    const label = key === "distance" ? `DISTANCE (${(b.distanceUnit || "mi").toUpperCase()})` : FIELD_DEFS[key].label;
+    return progressionFieldHTML(bIdx, key, label, b[key], phaseWeeks);
+  }).join("");
+
   return `<div class="block-card">
     <div class="block-head">
-      <input type="text" class="text-input" data-block-name="${bIdx}" value="${escapeHTML(b.name)}" placeholder="Name">
+      <input type="text" class="text-input" data-block-name="${bIdx}" value="${escapeHTML(b.name)}" placeholder="Exercise / activity name" autocomplete="off">
       <button class="icon-btn small" data-remove-block="${bIdx}">${iconSVG("trash", 16)}</button>
     </div>
-    <div class="segmented" style="margin-bottom:12px;">${kindSeg}</div>
-    ${fields}
+    ${fieldsHTML || `<p class="hint-text">No fields yet — add one below.</p>`}
+    <div class="field-chip-row">${addChips}</div>
   </div>`;
 }
 function renderSlotEditor() {
@@ -773,19 +964,16 @@ function renderSlotEditor() {
   if (!slot || !phase) return;
   const phaseWeeks = Math.max(1, phase.endWeek - phase.startWeek + 1);
   el("wk-slot-editor-title").textContent = slot.name || "SESSION TEMPLATE";
-  const kindTabs = ["strength","cardio","interval","ruck"].map((k) =>
-    `<button class="seg-btn ${slot.kind === k ? "active" : ""}" data-slot-kind="${k}">${k.toUpperCase()}</button>`).join("");
-  const blocksHTML = slot.blocks.map((b, bIdx) => blockEditorHTML(b, bIdx, phaseWeeks)).join("");
+  const blocksHTML = slot.blocks.map((b, bIdx) => blockEditorHTML(b, bIdx, phaseWeeks, slot)).join("");
   el("wk-slot-editor-body").innerHTML = `
     <label class="field-label" style="margin-top:0;">SESSION NAME</label>
     <input type="text" class="text-input" id="slot-name-input" value="${escapeHTML(slot.name)}">
-    <label class="field-label">DEFAULT TYPE FOR NEW ITEMS</label>
-    <div class="segmented" id="slot-kind-seg">${kindTabs}</div>
     <label class="field-label" style="display:flex; align-items:center; gap:8px; margin-top:16px;">
       <input type="checkbox" id="slot-optional-input" ${slot.optional ? "checked" : ""} style="width:16px; height:16px;">
       OPTIONAL / RECOVERY SESSION
     </label>
     <div class="builder-section-title">EXERCISES / ACTIVITIES</div>
+    <button class="wk-dashed-card" style="width:100%; text-align:center; margin-bottom:14px;" id="btn-import-from-quickstart">IMPORT FROM QUICK-START TEMPLATE</button>
     ${blocksHTML || `<p class="hint-text">No items yet — add one below.</p>`}
     <button class="wk-dashed-card" style="width:100%; text-align:center;" id="btn-add-block">+ ADD ITEM</button>
   `;
@@ -796,39 +984,84 @@ function attachSlotEditorHandlers() {
   if (!slot) return;
   const nameInput = el("slot-name-input");
   if (nameInput) nameInput.onblur = (e) => { slot.name = e.target.value; };
-  document.querySelectorAll("#slot-kind-seg .seg-btn").forEach((b) => b.onclick = () => {
-    slot.kind = b.getAttribute("data-slot-kind");
-    renderSlotEditor(); renderWorkout();
-  });
   const optInput = el("slot-optional-input");
   if (optInput) optInput.onchange = (e) => { slot.optional = e.target.checked; };
 
-  document.querySelectorAll("[data-block-name]").forEach((inp) => inp.onblur = (e) => {
-    slot.blocks[Number(inp.getAttribute("data-block-name"))].name = e.target.value;
+  document.querySelectorAll("[data-block-name]").forEach((inp) => {
+    attachExerciseAutocomplete(inp, (entry) => {
+      const idx = Number(inp.getAttribute("data-block-name"));
+      const block = slot.blocks[idx];
+      block.name = entry.name;
+      if (entry.fields.length) block.fields = entry.fields.slice();
+      block.fields.forEach((k) => {
+        ensureField(block, k, slot);
+        if (k !== "reps" && entry.values[k] != null) block[k].base = entry.values[k];
+        if (k === "reps" && entry.values.reps != null) block.reps.base = entry.values.reps;
+      });
+      renderSlotEditor();
+    });
+    inp.onblur = (e) => {
+      const idx = Number(inp.getAttribute("data-block-name"));
+      const block = slot.blocks[idx];
+      block.name = e.target.value;
+      const snapshot = {};
+      block.fields.forEach((k) => { if (block[k] && block[k].base != null) snapshot[k] = block[k].base; });
+      upsertLibraryEntry(e.target.value, block.fields, snapshot);
+    };
   });
-  document.querySelectorAll("[data-block-kind]").forEach((b) => b.onclick = () => {
-    const [idx, kind] = b.getAttribute("data-block-kind").split(":");
-    slot.blocks[Number(idx)].kind = kind;
-    ensureBlockFields(slot.blocks[Number(idx)]);
-    renderSlotEditor();
-  });
+  const importBtn = el("btn-import-from-quickstart");
+  if (importBtn) importBtn.onclick = () => {
+    const ctx = { mode: "slot", phaseId: slotEditorCtx.phaseId, slotId: slotEditorCtx.slotId };
+    closeModal("wk-slot-editor-overlay");
+    openImportTemplatePicker(ctx);
+  };
   document.querySelectorAll("[data-remove-block]").forEach((b) => b.onclick = () => {
     slot.blocks.splice(Number(b.getAttribute("data-remove-block")), 1);
     renderSlotEditor(); renderWorkout();
   });
+  document.querySelectorAll("[data-add-field]").forEach((b) => b.onclick = () => {
+    const [idx, key] = b.getAttribute("data-add-field").split(":");
+    addFieldToBlock(slot.blocks[Number(idx)], key, slot);
+    renderSlotEditor();
+  });
+  document.querySelectorAll("[data-remove-field]").forEach((b) => b.onclick = () => {
+    const [idx, key] = b.getAttribute("data-remove-field").split(":");
+    removeFieldFromBlock(slot.blocks[Number(idx)], key);
+    renderSlotEditor();
+  });
+  document.querySelectorAll("[data-amrap-toggle]").forEach((cb) => cb.onchange = (e) => {
+    const block = slot.blocks[Number(cb.getAttribute("data-amrap-toggle"))];
+    block.reps.amrap = e.target.checked;
+    if (e.target.checked) removeFieldFromBlock(block, "rpe");
+    renderSlotEditor();
+  });
   document.querySelectorAll("[data-prog-mode]").forEach((b) => b.onclick = () => {
     const [idx, key, mode] = b.getAttribute("data-prog-mode").split(":");
-    slot.blocks[Number(idx)][key].mode = mode;
+    const field = slot.blocks[Number(idx)][key];
+    field.mode = mode;
+    if (mode !== "fixed") rememberProgDefault(slot, key, field);
+    renderSlotEditor();
+  });
+  document.querySelectorAll("[data-prog-sign]").forEach((b) => b.onclick = () => {
+    const [idx, key] = b.getAttribute("data-prog-sign").split(":");
+    const field = slot.blocks[Number(idx)][key];
+    field.stepPerWeek = (field.stepPerWeek || 0) > 0 ? -(field.stepPerWeek || 0.0001) : Math.abs(field.stepPerWeek || 0.0001);
+    rememberProgDefault(slot, key, field);
     renderSlotEditor();
   });
   document.querySelectorAll("[data-prog-base]").forEach((inp) => inp.onblur = (e) => {
     const [idx, key] = inp.getAttribute("data-prog-base").split(":");
-    slot.blocks[Number(idx)][key].base = parseFloat(e.target.value) || 0;
+    const field = slot.blocks[Number(idx)][key];
+    field.base = parseFloat(e.target.value) || 0;
+    rememberProgDefault(slot, key, field);
     renderSlotEditor();
   });
   document.querySelectorAll("[data-prog-step]").forEach((inp) => inp.onblur = (e) => {
     const [idx, key] = inp.getAttribute("data-prog-step").split(":");
-    slot.blocks[Number(idx)][key].stepPerWeek = parseFloat(e.target.value) || 0;
+    const field = slot.blocks[Number(idx)][key];
+    const sign = (field.stepPerWeek || 0) < 0 ? -1 : 1;
+    field.stepPerWeek = sign * Math.abs(parseFloat(e.target.value) || 0);
+    rememberProgDefault(slot, key, field);
     renderSlotEditor();
   });
   document.querySelectorAll("[data-prog-custom]").forEach((inp) => inp.onblur = (e) => {
@@ -836,10 +1069,13 @@ function attachSlotEditorHandlers() {
     const field = slot.blocks[Number(idx)][key];
     field.customValues = field.customValues || {};
     field.customValues[Number(week)] = parseFloat(e.target.value) || 0;
+    rememberProgDefault(slot, key, field);
   });
   const addBlockBtn = el("btn-add-block");
   if (addBlockBtn) addBlockBtn.onclick = () => {
-    slot.blocks.push(ensureBlockFields({ id: uid(), name: "", kind: slot.kind }));
+    const block = { id: uid(), name: "", fields: ["sets","reps","weight"] };
+    block.fields.forEach((k) => ensureField(block, k, slot));
+    slot.blocks.push(block);
     renderSlotEditor();
   };
 }
@@ -881,96 +1117,99 @@ function variantsScreenHTML() {
 function hasCompletedSet() {
   if (!activeWorkout) return false;
   return activeWorkout.exercises.some((ex) => {
-    const kind = ex.kind || "strength";
-    if (kind === "strength") return (ex.sets || []).some((s) => s.weight !== "" && s.weight !== undefined && s.reps !== "" && s.reps !== undefined);
-    if (kind === "cardio" || kind === "ruck") return ex.log && (ex.log.durationMin !== "" || ex.log.distance !== "");
-    if (kind === "interval") return ex.log && ex.log.roundsCompleted !== "" && ex.log.roundsCompleted !== undefined;
-    return false;
+    if (ex.hasSets) {
+      const perSetKeys = (ex.fields || []).filter((k) => PER_SET_CAPABLE.includes(k));
+      return (ex.sets || []).some((s) => perSetKeys.some((k) => s[k] !== "" && s[k] !== undefined));
+    }
+    return ex.log && Object.keys(ex.log).some((k) => ex.log[k] !== "" && ex.log[k] !== undefined);
   });
 }
 
-function targetLineHTML(ex) {
-  const kind = ex.kind || "strength";
-  if (kind === "strength" && ex.targetReps != null) {
-    return `<div class="hint-text" style="margin-bottom:8px;">TARGET: ${ex.targetReps} reps${ex.targetRPE != null ? " @ RPE " + ex.targetRPE : ""}</div>`;
-  }
-  if (kind === "cardio") {
-    const parts = [];
-    if (ex.targetDurationMin) parts.push(ex.targetDurationMin + " min");
-    if (ex.targetDistance) parts.push(ex.targetDistance + " " + (ex.distanceUnit || "mi"));
-    if (ex.targetEffort != null) parts.push("effort " + ex.targetEffort + "/10");
-    return parts.length ? `<div class="hint-text" style="margin-bottom:8px;">TARGET: ${parts.join(" · ")}</div>` : "";
-  }
-  if (kind === "interval") {
-    return `<div class="hint-text" style="margin-bottom:8px;">TARGET: ${ex.targetRounds ?? "?"} rounds · ${ex.targetWorkSec ?? "?"}s work / ${ex.targetRestSec ?? "?"}s rest</div>`;
-  }
-  if (kind === "ruck") {
-    const parts = [];
-    if (ex.targetDistance) parts.push(ex.targetDistance + " " + (ex.distanceUnit || "mi"));
-    if (ex.targetLoadLbs) parts.push(ex.targetLoadLbs + " lbs");
-    if (ex.targetDurationMin) parts.push(ex.targetDurationMin + " min");
-    return parts.length ? `<div class="hint-text" style="margin-bottom:8px;">TARGET: ${parts.join(" · ")}</div>` : "";
-  }
-  return "";
+function fmtFieldValue(key, v) {
+  if (v == null || v === "") return null;
+  if (key === "distance") return v; // unit appended by caller
+  return v;
 }
 
+function targetLineHTML(ex) {
+  if (!ex.targets) return "";
+  const parts = [];
+  (ex.fields || []).forEach((k) => {
+    if (k === "sets") return; // implicit in the set grid itself
+    const v = ex.targets[k];
+    if (v == null || v === "") return;
+    if (k === "reps") { parts.push(v === "AMRAP" ? "AMRAP" : v + " reps"); return; }
+    if (k === "weight") { parts.push(v + " lbs"); return; }
+    if (k === "rpe") { parts.push("RPE " + v); return; }
+    if (k === "restBetweenSets") { parts.push("rest " + v + "s"); return; }
+    if (k === "duration") { parts.push(v + " min"); return; }
+    if (k === "distance") { parts.push(v + " " + (ex.distanceUnit || "mi")); return; }
+    if (k === "rounds") { parts.push(v + " rounds"); return; }
+    if (k === "workSec") { parts.push(v + "s work"); return; }
+    if (k === "restSec") { parts.push(v + "s rest"); return; }
+  });
+  return parts.length ? `<div class="hint-text" style="margin-bottom:8px;">TARGET: ${parts.join(" · ")}</div>` : "";
+}
+
+const FIELD_LOG_META = {
+  reps:            { label: "REPS", type: "number", inputmode: "numeric" },
+  weight:          { label: "WEIGHT (LBS)", type: "number", inputmode: "decimal" },
+  rpe:             { label: "RPE", type: "number", inputmode: "decimal", step: "0.5" },
+  duration:        { label: "DURATION (MIN)", type: "number", inputmode: "numeric" },
+  distance:        { label: "DISTANCE", type: "number", inputmode: "decimal", step: "0.1" },
+  restBetweenSets: { label: "REST BETWEEN SETS (SEC)", type: "number", inputmode: "numeric" },
+  rounds:          { label: "ROUNDS COMPLETED", type: "number", inputmode: "numeric" },
+  workSec:         { label: "WORK INTERVAL (SEC)", type: "number", inputmode: "numeric" },
+  restSec:         { label: "REST INTERVAL (SEC)", type: "number", inputmode: "numeric" }
+};
+
 function exerciseCardHTML(ex, exIdx) {
-  const kind = ex.kind || "strength";
+  const fields = ex.fields || [];
   const head = `
     <div class="wk-ex-head">
-      <input type="text" class="wk-ex-name-input" data-ex-name="${exIdx}" value="${escapeHTML(ex.name)}" placeholder="${kind === "strength" ? "Exercise name" : "Activity name"}">
+      <input type="text" class="wk-ex-name-input" data-ex-name="${exIdx}" value="${escapeHTML(ex.name)}" placeholder="Exercise / activity name" autocomplete="off">
       <div class="wk-ex-actions">
-        ${kind !== "strength" ? `<span class="kind-badge">${kind.toUpperCase()}</span>` : ""}
         <button class="icon-btn small" data-ex-note="${exIdx}" style="color:${ex.note ? "var(--accent)" : "var(--text-dim)"}">${iconSVG("note", 18)}</button>
         <button class="icon-btn small" data-ex-remove="${exIdx}" ${activeWorkout.exercises.length <= 1 ? "disabled style='opacity:.3'" : ""}>${iconSVG("trash", 18)}</button>
       </div>
     </div>`;
   const targetLine = targetLineHTML(ex);
 
-  if (kind === "strength") {
-    const showRPE = ex.targetRPE != null;
-    const cols = showRPE ? "28px 1fr 1fr 1fr 22px" : "32px 1fr 1fr 26px";
-    return `<div class="wk-exercise-card">
-      ${head}${targetLine}
-      <div class="wk-set-header" style="grid-template-columns:${cols};"><div>SET</div><div>WEIGHT</div><div>REPS</div>${showRPE ? "<div>RPE</div>" : ""}<div></div></div>
+  let body = "";
+  if (ex.hasSets) {
+    const perSetKeys = sortFields(fields).filter((k) => PER_SET_CAPABLE.includes(k));
+    const cols = `28px ${perSetKeys.map(() => "1fr").join(" ")} 22px`;
+    body = `
+      <div class="wk-set-header" style="grid-template-columns:${cols};"><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div></div>
       ${ex.sets.map((s, setIdx) => `
         <div class="wk-set-row" style="grid-template-columns:${cols};">
           <div class="set-num">${setIdx + 1}</div>
-          <input type="number" class="wk-set-input" inputmode="decimal" placeholder="lbs" value="${s.weight}" data-set-weight="${exIdx}:${setIdx}">
-          <input type="number" class="wk-set-input" inputmode="numeric" placeholder="reps" value="${s.reps}" data-set-reps="${exIdx}:${setIdx}">
-          ${showRPE ? `<input type="number" class="wk-set-input" inputmode="decimal" step="0.5" placeholder="rpe" value="${s.rpe || ""}" data-set-rpe="${exIdx}:${setIdx}">` : ""}
+          ${perSetKeys.map((k) => `<input type="number" class="wk-set-input" inputmode="decimal" placeholder="${ex.ampap && k === "reps" ? "reps" : ""}" value="${s[k] != null ? s[k] : ""}" data-set-field="${exIdx}:${setIdx}:${k}">`).join("")}
           <button class="wk-set-remove" data-set-remove="${exIdx}:${setIdx}">×</button>
         </div>`).join("")}
-      <button class="wk-add-set" data-add-set="${exIdx}">+ ADD SET</button>
+      <button class="wk-add-set" data-add-set="${exIdx}">+ ADD SET</button>`;
+  }
+  const singleKeys = sortFields(fields).filter((k) => ALWAYS_SINGLE.includes(k) || (!ex.hasSets && PER_SET_CAPABLE.includes(k)));
+  if (singleKeys.length) {
+    const idleLabel = `START REST (${ex.log.restBetweenSets}s)`;
+    const isResting = restTimerState && restTimerState.exIdx === exIdx;
+    const remaining = isResting ? Math.max(0, Math.ceil((restTimerState.endsAt - Date.now()) / 1000)) : null;
+    const rtBtn = (ex.hasSets && ex.log.restBetweenSets)
+      ? `<button type="button" class="rest-timer-btn ${isResting ? "running" : ""}" data-rest-timer="${exIdx}" data-rest-label="${idleLabel}">${isResting ? `RESTING… ${remaining}s` : idleLabel}</button>`
+      : "";
+    body += `<div class="${ex.hasSets ? "single-fields-block" : ""}">
+      ${singleKeys.map((k) => {
+        const meta = FIELD_LOG_META[k] || { label: k.toUpperCase(), type: "number" };
+        const label = k === "distance" ? `DISTANCE (${(ex.distanceUnit || "mi").toUpperCase()})` : meta.label;
+        return `<label class="field-label" style="margin:10px 0 4px;">${label}</label>
+          <input type="number" class="wk-set-input" inputmode="${meta.inputmode || "decimal"}" ${meta.step ? `step="${meta.step}"` : ""} value="${ex.log[k]}" data-log-field="${exIdx}:${k}">`;
+      }).join("")}
+      ${rtBtn}
     </div>`;
   }
+  if (!fields.length) body = `<p class="hint-text">No fields on this item.</p>`;
 
-  if (kind === "cardio" || kind === "ruck") {
-    const unit = ex.distanceUnit || "mi";
-    return `<div class="wk-exercise-card">
-      ${head}${targetLine}
-      <div class="row-2" style="margin-bottom:10px;">
-        <div><label class="field-label" style="margin:0 0 4px;">DURATION (MIN)</label>
-          <input type="number" class="wk-set-input" value="${ex.log.durationMin}" data-log-field="${exIdx}:durationMin"></div>
-        <div><label class="field-label" style="margin:0 0 4px;">DISTANCE (${unit.toUpperCase()})</label>
-          <input type="number" class="wk-set-input" step="0.1" value="${ex.log.distance}" data-log-field="${exIdx}:distance"></div>
-      </div>
-      ${kind === "cardio"
-        ? `<label class="field-label" style="margin:0 0 4px;">EFFORT (1–10)</label>
-           <input type="number" class="wk-set-input" min="1" max="10" value="${ex.log.effort}" data-log-field="${exIdx}:effort">`
-        : `<label class="field-label" style="margin:0 0 4px;">LOAD CARRIED (LBS)</label>
-           <input type="number" class="wk-set-input" value="${ex.log.loadLbs}" data-log-field="${exIdx}:loadLbs">`}
-    </div>`;
-  }
-
-  if (kind === "interval") {
-    return `<div class="wk-exercise-card">
-      ${head}${targetLine}
-      <label class="field-label" style="margin:0 0 4px;">ROUNDS COMPLETED</label>
-      <input type="number" class="wk-set-input" value="${ex.log.roundsCompleted}" data-log-field="${exIdx}:roundsCompleted">
-    </div>`;
-  }
-  return `<div class="wk-exercise-card">${head}</div>`;
+  return `<div class="wk-exercise-card">${head}${targetLine}${body}</div>`;
 }
 
 function activeScreenHTML() {
@@ -1065,23 +1304,50 @@ function manageScreenHTML() {
 }
 
 /* ---------- BUILDER SCREEN ---------- */
+function freeformFieldRowHTML(exIdx, key, ex) {
+  const label = key === "distance" ? `DISTANCE (${(ex.distanceUnit || "mi").toUpperCase()})` : FIELD_DEFS[key].label;
+  const value = ex[key];
+  if (key === "reps") {
+    const amrap = !!ex.repsAmrap;
+    const amrapToggle = `<label class="amrap-toggle"><input type="checkbox" data-bex-amrap="${exIdx}" ${amrap ? "checked" : ""}> AMRAP</label>`;
+    const removeBtn = `<button type="button" class="remove-x" data-bex-remove-field="${exIdx}:reps">×</button>`;
+    if (amrap) {
+      return `<div class="prog-field">
+        <div class="prog-field-label"><span>REPS</span>${amrapToggle}${removeBtn}</div>
+        <p class="hint-text" style="margin:4px 0 0;">Log actual reps completed each set. RPE isn't tracked for AMRAP.</p>
+      </div>`;
+    }
+    return `<div class="prog-field">
+      <div class="prog-field-label"><span>REPS</span>${amrapToggle}${removeBtn}</div>
+      <input type="number" class="text-input" value="${value != null ? value : ""}" data-bex-field="${exIdx}:reps">
+    </div>`;
+  }
+  return `<div class="prog-field">
+    <div class="prog-field-label"><span>${label}</span><button type="button" class="remove-x" data-bex-remove-field="${exIdx}:${key}">×</button></div>
+    <input type="number" class="text-input" step="any" value="${value != null ? value : ""}" data-bex-field="${exIdx}:${key}">
+  </div>`;
+}
+
 function builderScreenHTML() {
   if (!builder) return "";
   const icons = ["pull","push","legs","target"];
   const iconRow = icons.map((ic) => `<button data-set-icon="${ic}" class="${builder.icon === ic ? "active" : ""}">${iconSVG(ic, 20)}</button>`).join("");
   const tabs = builder.variants.map((v, idx) => `<button class="wk-variant-tab ${idx === builder.activeVar ? "active" : ""}" data-set-active-var="${idx}">${escapeHTML(v.name)}</button>`).join("");
   const activeVariant = builder.variants[builder.activeVar] || { name: "", exercises: [] };
-  const exercisesHTML = activeVariant.exercises.map((ex, idx) => `
-    <div class="wk-exercise-card">
-      <input type="text" class="text-input" style="margin-bottom:8px;" data-bex-name="${idx}" value="${escapeHTML(ex.name)}" placeholder="Exercise name">
-      <div style="display:flex; gap:8px; align-items:flex-end;">
-        <div style="flex:1;"><label class="field-label" style="margin:0 0 4px;">SETS</label>
-          <input type="number" class="text-input" data-bex-sets="${idx}" value="${ex.defaultSets}"></div>
-        <div style="flex:1;"><label class="field-label" style="margin:0 0 4px;">REPS</label>
-          <input type="number" class="text-input" data-bex-reps="${idx}" value="${ex.defaultReps}"></div>
+  activeVariant.exercises = activeVariant.exercises.map((ex) => normalizeTemplateExercise(ex));
+  const exercisesHTML = activeVariant.exercises.map((ex, idx) => {
+    const addChips = FIELD_ORDER.filter((k) => !ex.fields.includes(k))
+      .map((k) => `<button type="button" class="field-chip" data-bex-add-field="${idx}:${k}">+ ${FIELD_DEFS[k].label}</button>`).join("");
+    const fieldsHTML = sortFields(ex.fields).map((k) => freeformFieldRowHTML(idx, k, ex)).join("");
+    return `<div class="wk-exercise-card">
+      <div class="block-head">
+        <input type="text" class="text-input" data-bex-name="${idx}" value="${escapeHTML(ex.name)}" placeholder="Exercise name" autocomplete="off">
         <button class="icon-btn small" data-bex-remove="${idx}">${iconSVG("trash", 18)}</button>
       </div>
-    </div>`).join("");
+      ${fieldsHTML || `<p class="hint-text">No fields yet — add one below.</p>`}
+      <div class="field-chip-row">${addChips}</div>
+    </div>`;
+  }).join("");
 
   return `
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
@@ -1152,27 +1418,40 @@ function attachScreenHandlers() {
   if (vBack) vBack.onclick = () => { screen = "templates"; renderWorkout(); };
 
   // ACTIVE WORKOUT
-  document.querySelectorAll("[data-ex-name]").forEach((inp) => inp.onblur = (e) => {
-    activeWorkout.exercises[Number(inp.getAttribute("data-ex-name"))].name = e.target.value;
+  document.querySelectorAll("[data-ex-name]").forEach((inp) => {
+    attachExerciseAutocomplete(inp, (entry) => {
+      const idx = Number(inp.getAttribute("data-ex-name"));
+      const ex = activeWorkout.exercises[idx];
+      ex.name = entry.name;
+      if (entry.fields.length) {
+        const rebuilt = buildLoggable(entry.name, entry.fields, entry.values, { id: ex.id });
+        rebuilt.note = ex.note;
+        activeWorkout.exercises[idx] = rebuilt;
+      }
+      renderWorkout();
+    });
+    inp.onblur = (e) => {
+      const idx = Number(inp.getAttribute("data-ex-name"));
+      const ex = activeWorkout.exercises[idx];
+      ex.name = e.target.value;
+      const snapshot = {};
+      (ex.fields || []).forEach((k) => {
+        if (k === "sets") return;
+        const sample = ex.hasSets ? (ex.sets[0] || {})[k] : ex.log[k];
+        if (sample != null && sample !== "") snapshot[k] = sample;
+      });
+      if (ex.hasSets) snapshot.sets = ex.sets.length;
+      upsertLibraryEntry(e.target.value, ex.fields, snapshot);
+    };
   });
   document.querySelectorAll("[data-ex-note]").forEach((b) => b.onclick = () => openNoteSheet(Number(b.getAttribute("data-ex-note"))));
   document.querySelectorAll("[data-ex-remove]").forEach((b) => b.onclick = () => {
     const idx = Number(b.getAttribute("data-ex-remove"));
     if (activeWorkout.exercises.length > 1) { activeWorkout.exercises.splice(idx, 1); renderWorkout(); }
   });
-  document.querySelectorAll("[data-set-weight]").forEach((inp) => inp.onblur = (e) => {
-    const [exIdx, setIdx] = inp.getAttribute("data-set-weight").split(":").map(Number);
-    activeWorkout.exercises[exIdx].sets[setIdx].weight = e.target.value;
-    renderWorkout();
-  });
-  document.querySelectorAll("[data-set-reps]").forEach((inp) => inp.onblur = (e) => {
-    const [exIdx, setIdx] = inp.getAttribute("data-set-reps").split(":").map(Number);
-    activeWorkout.exercises[exIdx].sets[setIdx].reps = e.target.value;
-    renderWorkout();
-  });
-  document.querySelectorAll("[data-set-rpe]").forEach((inp) => inp.onblur = (e) => {
-    const [exIdx, setIdx] = inp.getAttribute("data-set-rpe").split(":").map(Number);
-    activeWorkout.exercises[exIdx].sets[setIdx].rpe = e.target.value;
+  document.querySelectorAll("[data-set-field]").forEach((inp) => inp.onblur = (e) => {
+    const [exIdx, setIdx, key] = inp.getAttribute("data-set-field").split(":");
+    activeWorkout.exercises[Number(exIdx)].sets[Number(setIdx)][key] = e.target.value;
     renderWorkout();
   });
   document.querySelectorAll("[data-log-field]").forEach((inp) => inp.onblur = (e) => {
@@ -1187,12 +1466,17 @@ function attachScreenHandlers() {
   document.querySelectorAll("[data-add-set]").forEach((b) => b.onclick = () => {
     const exIdx = Number(b.getAttribute("data-add-set"));
     const ex = activeWorkout.exercises[exIdx];
-    ex.sets.push({ reps: ex.targetReps != null ? String(ex.targetReps) : "", weight: "", rpe: "" });
+    const perSetKeys = (ex.fields || []).filter((k) => PER_SET_CAPABLE.includes(k));
+    const template = ex.sets[ex.sets.length - 1] || {};
+    const row = {};
+    perSetKeys.forEach((k) => { row[k] = (k === "reps" && ex.ampap) ? "" : (template[k] != null ? template[k] : ""); });
+    ex.sets.push(row);
     renderWorkout();
   });
+  document.querySelectorAll("[data-rest-timer]").forEach((b) => b.onclick = () => startRestTimer(Number(b.getAttribute("data-rest-timer")), b));
   const addExBtn = el("btn-add-exercise");
   if (addExBtn) addExBtn.onclick = () => {
-    activeWorkout.exercises.push({ id: "e-" + uid(), name: "", kind: "strength", sets: [{ reps: "10", weight: "", rpe: "" }] });
+    activeWorkout.exercises.push(buildLoggable("", ["sets","reps","weight"], { sets: 3 }, { id: "e-" + uid() }));
     renderWorkout();
   };
   const completeBtn = el("btn-complete-workout");
@@ -1257,14 +1541,50 @@ function attachScreenHandlers() {
   };
   const bVarName = el("builder-variant-name");
   if (bVarName) bVarName.onblur = (e) => { builder.variants[builder.activeVar].name = e.target.value; };
-  document.querySelectorAll("[data-bex-name]").forEach((inp) => inp.onblur = (e) => {
-    builder.variants[builder.activeVar].exercises[Number(inp.getAttribute("data-bex-name"))].name = e.target.value;
+  document.querySelectorAll("[data-bex-name]").forEach((inp) => {
+    const activeVariant = builder.variants[builder.activeVar];
+    attachExerciseAutocomplete(inp, (entry) => {
+      const idx = Number(inp.getAttribute("data-bex-name"));
+      const ex = activeVariant.exercises[idx];
+      ex.name = entry.name;
+      if (entry.fields.length) {
+        ex.fields = entry.fields.slice();
+        ex.fields.forEach((k) => { if (entry.values[k] != null) ex[k] = entry.values[k]; });
+      }
+      renderWorkout();
+    });
+    inp.onblur = (e) => {
+      const idx = Number(inp.getAttribute("data-bex-name"));
+      const ex = activeVariant.exercises[idx];
+      ex.name = e.target.value;
+      const snapshot = {};
+      ex.fields.forEach((k) => { if (ex[k] != null) snapshot[k] = ex[k]; });
+      upsertLibraryEntry(e.target.value, ex.fields, snapshot);
+    };
   });
-  document.querySelectorAll("[data-bex-sets]").forEach((inp) => inp.onblur = (e) => {
-    builder.variants[builder.activeVar].exercises[Number(inp.getAttribute("data-bex-sets"))].defaultSets = parseInt(e.target.value) || 1;
+  document.querySelectorAll("[data-bex-field]").forEach((inp) => inp.onblur = (e) => {
+    const [idx, key] = inp.getAttribute("data-bex-field").split(":");
+    builder.variants[builder.activeVar].exercises[Number(idx)][key] = parseFloat(e.target.value) || 0;
   });
-  document.querySelectorAll("[data-bex-reps]").forEach((inp) => inp.onblur = (e) => {
-    builder.variants[builder.activeVar].exercises[Number(inp.getAttribute("data-bex-reps"))].defaultReps = parseInt(e.target.value) || 1;
+  document.querySelectorAll("[data-bex-amrap]").forEach((cb) => cb.onchange = (e) => {
+    const ex = builder.variants[builder.activeVar].exercises[Number(cb.getAttribute("data-bex-amrap"))];
+    ex.repsAmrap = e.target.checked;
+    if (e.target.checked) ex.fields = ex.fields.filter((f) => f !== "rpe");
+    renderWorkout();
+  });
+  document.querySelectorAll("[data-bex-add-field]").forEach((b) => b.onclick = () => {
+    const [idx, key] = b.getAttribute("data-bex-add-field").split(":");
+    const ex = builder.variants[builder.activeVar].exercises[Number(idx)];
+    if (!ex.fields.includes(key)) ex.fields.push(key);
+    if (ex[key] == null) ex[key] = FIELD_HARD_DEFAULTS[key] != null ? FIELD_HARD_DEFAULTS[key] : 0;
+    if (key === "distance") ex.distanceUnit = ex.distanceUnit || "mi";
+    renderWorkout();
+  });
+  document.querySelectorAll("[data-bex-remove-field]").forEach((b) => b.onclick = () => {
+    const [idx, key] = b.getAttribute("data-bex-remove-field").split(":");
+    const ex = builder.variants[builder.activeVar].exercises[Number(idx)];
+    ex.fields = ex.fields.filter((f) => f !== key);
+    renderWorkout();
   });
   document.querySelectorAll("[data-bex-remove]").forEach((b) => b.onclick = () => {
     builder.variants[builder.activeVar].exercises.splice(Number(b.getAttribute("data-bex-remove")), 1);
@@ -1272,7 +1592,7 @@ function attachScreenHandlers() {
   });
   const addExB = el("btn-builder-add-exercise");
   if (addExB) addExB.onclick = () => {
-    builder.variants[builder.activeVar].exercises.push({ id: "e-" + uid(), name: "", defaultSets: 3, defaultReps: 10 });
+    builder.variants[builder.activeVar].exercises.push({ id: "e-" + uid(), name: "", fields: ["sets","reps","weight"], sets: 3, reps: 10, weight: 0 });
     renderWorkout();
   };
   const saveB = el("btn-builder-save");
@@ -1359,10 +1679,10 @@ function attachScreenHandlers() {
 /* ---------- ACTIONS ---------- */
 function selectVariant(variant) {
   selectedVariant = variant;
-  const exercises = variant.exercises.map((ex) => ({
-    ...ex,
-    sets: Array.from({ length: ex.defaultSets }, () => ({ reps: ex.defaultReps, weight: "" }))
-  }));
+  const exercises = variant.exercises.map((ex) => {
+    const norm = normalizeTemplateExercise(ex);
+    return buildLoggable(norm.name, norm.fields, norm, {});
+  });
   activeWorkout = {
     templateId: selectedTemplate.id, templateName: selectedTemplate.name,
     variantId: variant.id, variantName: variant.name,
@@ -1370,6 +1690,57 @@ function selectVariant(variant) {
   };
   screen = "active";
   renderWorkout();
+}
+
+/* ---------- EXERCISE NAME AUTOCOMPLETE ---------- */
+function attachExerciseAutocomplete(inputEl, onPick) {
+  let dropdown = null;
+  const hide = () => { if (dropdown) { dropdown.remove(); dropdown = null; } };
+  inputEl.addEventListener("input", () => {
+    const matches = searchLibrary(inputEl.value);
+    hide();
+    if (!matches.length) return;
+    dropdown = document.createElement("div");
+    dropdown.className = "autocomplete-dropdown";
+    dropdown.innerHTML = matches.map((m, i) =>
+      `<div class="ac-item" data-ac-idx="${i}"><span>${escapeHTML(m.name)}</span><span class="ac-item-sub">${m.fields.map((f) => (FIELD_DEFS[f] || {}).label || f).join(" · ")}</span></div>`
+    ).join("");
+    const rect = inputEl.getBoundingClientRect();
+    dropdown.style.position = "fixed";
+    dropdown.style.left = rect.left + "px";
+    dropdown.style.top = rect.bottom + "px";
+    dropdown.style.width = rect.width + "px";
+    document.body.appendChild(dropdown);
+    dropdown.querySelectorAll(".ac-item").forEach((item, i) => {
+      item.addEventListener("mousedown", (e) => { e.preventDefault(); onPick(matches[i]); hide(); });
+    });
+  });
+  inputEl.addEventListener("blur", () => { setTimeout(hide, 150); });
+}
+
+/* ---------- REST TIMER ---------- */
+let restTimerState = null; // { exIdx, endsAt }
+let restTimerHandle = null;
+function startRestTimer(exIdx) {
+  const ex = activeWorkout.exercises[exIdx];
+  const seconds = Number(ex.log.restBetweenSets) || 60;
+  restTimerState = { exIdx, endsAt: Date.now() + seconds * 1000 };
+  tickRestTimer();
+}
+function tickRestTimer() {
+  clearTimeout(restTimerHandle);
+  if (!restTimerState) return;
+  const remaining = Math.ceil((restTimerState.endsAt - Date.now()) / 1000);
+  const btn = document.querySelector(`[data-rest-timer="${restTimerState.exIdx}"]`);
+  if (remaining <= 0) {
+    const idleLabel = btn ? btn.getAttribute("data-rest-label") : null;
+    restTimerState = null;
+    if (btn && idleLabel) { btn.textContent = idleLabel; btn.classList.remove("running"); }
+    window.showToast && window.showToast("REST COMPLETE");
+    return;
+  }
+  if (btn) { btn.textContent = `RESTING… ${remaining}s`; btn.classList.add("running"); }
+  restTimerHandle = setTimeout(tickRestTimer, 250);
 }
 
 function completeWorkout() {
@@ -1388,8 +1759,10 @@ function backFromActive() {
 }
 function discardWorkout() {
   closeModal("wk-discard-overlay");
+  const wasProgram = !!(activeWorkout && activeWorkout.programId);
   noteExIdx = null; activeWorkout = null; selectedVariant = null;
-  screen = "variants";
+  screen = wasProgram ? null : "variants";
+  if (wasProgram) tab = "home";
   renderWorkout();
 }
 
@@ -1492,6 +1865,39 @@ el("btn-discard-confirm").onclick = discardWorkout;
 el("wk-discard-overlay").addEventListener("click", (e) => { if (e.target.id === "wk-discard-overlay") closeModal("wk-discard-overlay"); });
 
 function detailBlockHTML(ex) {
+  if (ex.fields) return detailBlockHTMLNew(ex);
+  return detailBlockHTMLLegacy(ex);
+}
+function detailBlockHTMLNew(ex) {
+  const rowLabel = { reps: "REPS", weight: "WEIGHT", rpe: "RPE", duration: "DURATION", distance: "DISTANCE", restBetweenSets: "REST", rounds: "ROUNDS", workSec: "WORK", restSec: "REST" };
+  if (ex.hasSets) {
+    const perSetKeys = sortFields(ex.fields).filter((k) => PER_SET_CAPABLE.includes(k));
+    const singleKeys = sortFields(ex.fields).filter((k) => ALWAYS_SINGLE.includes(k));
+    return `<div class="wk-detail-block">
+      <div class="db-name">${escapeHTML(ex.name)}</div>
+      <div class="wk-detail-set" style="grid-template-columns:28px repeat(${perSetKeys.length},1fr);">
+        <span class="num">#</span>${perSetKeys.map((k) => `<span>${rowLabel[k] || k.toUpperCase()}</span>`).join("")}
+      </div>
+      ${ex.sets.map((s, i) => `<div class="wk-detail-set" style="grid-template-columns:28px repeat(${perSetKeys.length},1fr);">
+        <span class="num">${i+1}</span>${perSetKeys.map((k) => `<span class="${k === "weight" ? "wt" : ""}">${escapeHTML(s[k] != null && s[k] !== "" ? s[k] : "—")}${k === "distance" ? " " + (ex.distanceUnit||"mi") : ""}</span>`).join("")}
+      </div>`).join("")}
+      ${singleKeys.map((k) => (ex.log && ex.log[k] !== "") ? `<div class="stat-line" style="margin-top:8px;"><span class="lbl">${rowLabel[k]||k}</span><span class="val">${escapeHTML(ex.log[k])}${k.includes("Sec") ? "s" : ""}</span></div>` : "").join("")}
+      ${ex.note ? `<div class="wk-detail-note">${escapeHTML(ex.note)}</div>` : ""}
+    </div>`;
+  }
+  const rows = sortFields(ex.fields).map((k) => {
+    const v = ex.log ? ex.log[k] : "";
+    if (v == null || v === "") return "";
+    const unit = k === "distance" ? " " + (ex.distanceUnit || "mi") : (k.includes("Sec") ? "s" : (k === "duration" ? " min" : (k === "weight" ? " lbs" : "")));
+    return `<div class="stat-line"><span class="lbl">${rowLabel[k] || k.toUpperCase()}</span><span class="val">${escapeHTML(v)}${unit}</span></div>`;
+  }).join("");
+  return `<div class="wk-detail-block">
+    <div class="db-name">${escapeHTML(ex.name)}</div>
+    ${rows}
+    ${ex.note ? `<div class="wk-detail-note">${escapeHTML(ex.note)}</div>` : ""}
+  </div>`;
+}
+function detailBlockHTMLLegacy(ex) {
   const kind = ex.kind || "strength";
   if (kind === "strength") {
     return `<div class="wk-detail-block">
@@ -1529,7 +1935,7 @@ function openHistoryDetail(id) {
   const exercises = completedExercisesOf(w);
   el("wk-detail-body").innerHTML = exercises.length ? exercises.map(detailBlockHTML).join("") : `<p class="hint-text">No completed sets recorded.</p>`;
   el("wk-detail-ex-count").textContent = exercises.length;
-  el("wk-detail-set-count").textContent = exercises.reduce((sum, ex) => sum + (ex.kind === "strength" ? ex.sets.length : 1), 0);
+  el("wk-detail-set-count").textContent = exercises.reduce((sum, ex) => sum + ((ex.hasSets || ex.kind === "strength") ? (ex.sets ? ex.sets.length : 0) : 1), 0);
   openModal("wk-detail-overlay");
 }
 el("btn-close-detail").onclick = () => closeModal("wk-detail-overlay");
