@@ -189,43 +189,46 @@ function phaseForWeek(program, week) {
 // cardio / interval / ruck with hardcoded sub-fields) into the new
 // composable fields[] schema. Already-new blocks pass through unchanged.
 // This runs lazily on read so existing saved programs keep working.
+// Mutates `b` in place (and also returns it) so it's safe to call either
+// as `normalizeBlock(b)` or `b = normalizeBlock(b)`.
 function normalizeBlock(b) {
   if (b.fields) {
     b.distanceUnit = b.distanceUnit || "mi";
     if (b.reps) b.reps.amrap = !!b.reps.amrap;
     return b;
   }
-  const out = { id: b.id, name: b.name, note: b.note || "", distanceUnit: b.distanceUnit || "mi", fields: [] };
+  b.note = b.note || "";
+  b.distanceUnit = b.distanceUnit || "mi";
   if (b.kind === "strength") {
-    out.fields = ["sets","reps","weight","rpe"];
-    out.weight = defaultProgField(0, 5);
-    out.sets = b.sets || defaultProgField(3);
-    out.reps = b.reps || defaultProgField(10); out.reps.amrap = false;
-    out.rpe = b.rpe || defaultProgField(7, 0.5);
+    b.fields = ["sets","reps","weight","rpe"];
+    b.weight = defaultProgField(0, 5);
+    b.sets = b.sets || defaultProgField(3);
+    b.reps = b.reps || defaultProgField(10); b.reps.amrap = false;
+    b.rpe = b.rpe || defaultProgField(7, 0.5);
   } else if (b.kind === "cardio") {
-    out.fields = ["duration","distance","rpe"];
-    out.duration = b.durationMin || defaultProgField(20);
-    out.distance = b.distance || defaultProgField(0, 0.1);
-    out.rpe = b.effort || defaultProgField(5);
+    b.fields = ["duration","distance","rpe"];
+    b.duration = b.durationMin || defaultProgField(20);
+    b.distance = b.distance || defaultProgField(0, 0.1);
+    b.rpe = b.effort || defaultProgField(5);
   } else if (b.kind === "interval") {
-    out.fields = ["rounds","workSec","restSec"];
-    out.rounds = b.rounds || defaultProgField(6);
-    out.workSec = b.workSec || defaultProgField(60);
-    out.restSec = b.restSec || defaultProgField(30);
+    b.fields = ["rounds","workSec","restSec"];
+    b.rounds = b.rounds || defaultProgField(6);
+    b.workSec = b.workSec || defaultProgField(60);
+    b.restSec = b.restSec || defaultProgField(30);
   } else if (b.kind === "ruck") {
-    out.fields = ["duration","distance","weight"];
-    out.duration = b.durationMin || defaultProgField(45);
-    out.distance = b.distance || defaultProgField(3, 0.1);
-    out.weight = b.loadLbs || defaultProgField(30, 5);
+    b.fields = ["duration","distance","weight"];
+    b.duration = b.durationMin || defaultProgField(45);
+    b.distance = b.distance || defaultProgField(3, 0.1);
+    b.weight = b.loadLbs || defaultProgField(30, 5);
   } else {
-    out.fields = ["sets","reps"];
-    out.sets = defaultProgField(3); out.reps = defaultProgField(10);
+    b.fields = ["sets","reps","weight"];
+    b.sets = defaultProgField(3); b.reps = defaultProgField(10); b.weight = defaultProgField(0, 5);
   }
-  return out;
+  return b;
 }
 
 function resolveBlock(block, weekInPhase) {
-  normalizeBlock(block);
+  block = normalizeBlock(block);
   const out = { id: block.id, name: block.name, note: block.note || "", fields: sortFields(block.fields), distanceUnit: block.distanceUnit || "mi" };
   const amrap = !!(block.reps && block.reps.amrap);
   out.amrap = amrap;
@@ -671,6 +674,13 @@ function openProgramBuilder(program) {
     id: null, name: "", totalWeeks: 8, startDate: formatDate(new Date()),
     phases: [makeDefaultPhase("Phase 1", 1, 8)]
   };
+  // Migrate any legacy kind-based blocks up front, so opening an older
+  // saved program for editing can't crash the builder screen.
+  progBuilder.phases.forEach((phase) => {
+    (phase.sessionSlots || []).forEach((slot) => {
+      slot.blocks = (slot.blocks || []).map((b) => normalizeBlock(b));
+    });
+  });
   expandedPhaseId = progBuilder.phases.length ? progBuilder.phases[0].id : null;
   progCalView = new Date(progBuilder.startDate + "T12:00:00");
   screen = "program-builder";
