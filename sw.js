@@ -1,4 +1,4 @@
-const CACHE = "checklist-v5";
+const CACHE = "checklist-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,18 +28,20 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // Network-first: always try to get the latest file when online, only
+  // falling back to the cached copy if the network request fails (i.e.
+  // actually offline). This is intentionally NOT cache-first — during
+  // active development, a cache-first strategy can keep serving an old,
+  // already-fixed bug indefinitely even after new files are uploaded.
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(e.request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200) {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(e.request, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

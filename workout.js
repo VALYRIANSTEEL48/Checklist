@@ -444,18 +444,25 @@ function completedExercisesOf(workout) {
 /* ---------- RENDER ROOT ---------- */
 function renderWorkout() {
   let html;
-  if (screen === "templates") html = templatesScreenHTML();
-  else if (screen === "variants") html = variantsScreenHTML();
-  else if (screen === "active") html = activeScreenHTML();
-  else if (screen === "builder") html = builderScreenHTML();
-  else if (screen === "program-builder") html = programBuilderScreenHTML();
-  else if (tab === "history") html = historyScreenHTML();
-  else if (tab === "manage") html = manageScreenHTML();
-  else html = homeScreenHTML();
+  let hadError = false;
+  try {
+    if (screen === "templates") html = templatesScreenHTML();
+    else if (screen === "variants") html = variantsScreenHTML();
+    else if (screen === "active") html = activeScreenHTML();
+    else if (screen === "builder") html = builderScreenHTML();
+    else if (screen === "program-builder") html = programBuilderScreenHTML();
+    else if (tab === "history") html = historyScreenHTML();
+    else if (tab === "manage") html = manageScreenHTML();
+    else html = homeScreenHTML();
+  } catch (err) {
+    console.error("Workouts render error:", err);
+    html = errorScreenHTML(err);
+    hadError = true;
+  }
 
   el("workout-screen").innerHTML = html;
 
-  const showChrome = !isDrill();
+  const showChrome = !isDrill() && !hadError;
   el("wk-top-strip").style.display = showChrome ? "flex" : "none";
   el("wk-tabbar").style.display = showChrome ? "flex" : "none";
   el("wk-top-title").textContent = tab === "history" ? "HISTORY" : tab === "manage" ? "MANAGE" : "WORKOUTS";
@@ -463,7 +470,46 @@ function renderWorkout() {
     b.classList.toggle("active", showChrome && b.getAttribute("data-tab") === tab);
   });
 
-  attachScreenHandlers();
+  if (hadError) { attachErrorScreenHandlers(); return; }
+  try {
+    attachScreenHandlers();
+  } catch (err) {
+    console.error("Workouts handler-wiring error:", err);
+    el("workout-screen").innerHTML = errorScreenHTML(err);
+    attachErrorScreenHandlers();
+  }
+}
+
+function errorScreenHTML(err) {
+  const msg = (err && err.message) ? err.message : String(err);
+  const stack = (err && err.stack) ? err.stack : "";
+  return `
+    <div class="wk-builder-panel" style="border-color:var(--danger);">
+      <h1 class="screen-h1" style="color:var(--danger);">SOMETHING WENT WRONG</h1>
+      <p class="hint-text">The Workouts screen hit an error and couldn't render normally. Your data
+      is safe — nothing was deleted. Copy the details below when reporting this.</p>
+      <label class="field-label">ERROR</label>
+      <div class="text-input" style="white-space:pre-wrap; word-break:break-word; font-family:var(--font-mono); font-size:11px; user-select:text;">${escapeHTML(msg)}</div>
+      ${stack ? `<label class="field-label">DETAILS</label>
+      <div class="text-input" style="white-space:pre-wrap; word-break:break-word; font-family:var(--font-mono); font-size:10px; max-height:160px; overflow-y:auto; user-select:text;">${escapeHTML(stack)}</div>` : ""}
+      <button class="btn-primary" id="btn-error-go-home">GO TO WORKOUTS HOME</button>
+      <button class="btn-secondary" id="btn-error-deactivate-program">DEACTIVATE ACTIVE PROGRAM</button>
+    </div>`;
+}
+function attachErrorScreenHandlers() {
+  const goHomeBtn = el("btn-error-go-home");
+  if (goHomeBtn) goHomeBtn.onclick = () => { screen = null; tab = "home"; renderWorkout(); };
+  const deactivateBtn = el("btn-error-deactivate-program");
+  if (deactivateBtn) deactivateBtn.onclick = () => {
+    if (state.activeProgramId) {
+      const p = state.programs.find((x) => x.id === state.activeProgramId);
+      if (p) p.status = "draft";
+      state.activeProgramId = null;
+      save();
+    }
+    screen = null; tab = "home";
+    renderWorkout();
+  };
 }
 
 /* ---------- HOME SCREEN ---------- */

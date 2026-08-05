@@ -31,7 +31,17 @@ window.goToDashboard = function () {
 };
 
 function openChecklist() { showView("view-checklist"); }
-function openWorkout() { if (window.WorkoutData) window.WorkoutData.goHome(); showView("view-workout"); }
+function openWorkout() {
+  // Always switch the view first, so even if something inside the Workouts
+  // module throws, the person sees the (error-handled) Workouts screen
+  // instead of the tap silently doing nothing.
+  showView("view-workout");
+  try {
+    if (window.WorkoutData) window.WorkoutData.goHome();
+  } catch (err) {
+    console.error("Failed to open Workouts:", err);
+  }
+}
 
 el("tile-checklist").addEventListener("click", openChecklist);
 el("tile-workout").addEventListener("click", openWorkout);
