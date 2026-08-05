@@ -63,9 +63,9 @@ fields a given exercise actually needs (e.g. Sets + Distance for a
 farmer carry, Sets + Duration for a plank). This applies in both the
 freeform builder and program session editor.
 
-**Dashboard** — two tiles, Checklist and Workouts, each showing a live
-stat (main streak / this week's workout count). Tap a tile to enter that
-module, tap the back arrow in its header to return.
+**Dashboard** — three tiles (Checklist, Workouts, Assignments), each
+showing a live stat. Tap a tile to enter that module, tap the back arrow
+in its header to return.
 
 **Checklist**
 - Tap **+** to add a task. Choose **repeating** or **one-off**, and
@@ -136,6 +136,22 @@ back up and restore **both** datasets together in one JSON file
 (no separate save step). Start typing a name anywhere and matching past
 exercises show up to tap instead of retyping — picking one carries over
 its fields and last-used numbers, which you can still adjust.
+
+**Assignments** — ongoing projects, not daily habits. No streaks, no
+reset time; runs on its own clock entirely separate from Checklist and
+Workouts.
+- Three tabs: **Active**, **Planning**, **Completed**.
+- Create one with a title, description/instructions, an optional due
+  date, and a list of subtasks — add more subtasks any time, including
+  mid-project.
+- **Planning → Active**: tap Start once you're ready to begin; it just
+  sits in Planning until then.
+- **Active → Completed**: tap Mark Complete, write a short summary, and
+  — if you left any subtasks unchecked — a note on why. That note stays
+  attached to the assignment permanently.
+- Overdue assignments (past due date, not completed) get the same red
+  highlight as an overdue checklist task.
+- A completed assignment can be reopened if you're not actually done.
 
 
 ## A few things worth knowing

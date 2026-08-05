@@ -8,7 +8,7 @@
 "use strict";
 
 const el = (id) => document.getElementById(id);
-const VIEWS = ["view-dashboard", "view-checklist", "view-workout"];
+const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments"];
 
 function showView(id) {
   VIEWS.forEach((v) => { el(v).hidden = v !== id; });
@@ -23,6 +23,10 @@ function refreshDashboard() {
   if (window.WorkoutData) {
     el("dash-workout-stat").textContent = window.WorkoutData.weeklyStat();
   }
+  if (window.AssignmentsData) {
+    const n = window.AssignmentsData.activeCount();
+    el("dash-assignments-stat").textContent = n + " ACTIVE";
+  }
 }
 
 window.goToDashboard = function () {
@@ -32,9 +36,9 @@ window.goToDashboard = function () {
 
 function openChecklist() { showView("view-checklist"); }
 function openWorkout() {
-  // Always switch the view first, so even if something inside the Workouts
-  // module throws, the person sees the (error-handled) Workouts screen
-  // instead of the tap silently doing nothing.
+  // Always switch the view first, so even if something inside a module
+  // throws, the person sees the (error-handled) screen instead of the tap
+  // silently doing nothing.
   showView("view-workout");
   try {
     if (window.WorkoutData) window.WorkoutData.goHome();
@@ -42,14 +46,24 @@ function openWorkout() {
     console.error("Failed to open Workouts:", err);
   }
 }
+function openAssignments() {
+  showView("view-assignments");
+  try {
+    if (window.AssignmentsData) window.AssignmentsData.goHome();
+  } catch (err) {
+    console.error("Failed to open Assignments:", err);
+  }
+}
 
 el("tile-checklist").addEventListener("click", openChecklist);
 el("tile-workout").addEventListener("click", openWorkout);
+el("tile-assignments").addEventListener("click", openAssignments);
 
 /* ---------- MERGED SETTINGS SHEET ---------- */
 window.openMergedSettings = function () {
   if (window.ChecklistData) window.ChecklistData.populateSettings();
   if (window.WorkoutData) window.WorkoutData.populateSettings();
+  if (window.AssignmentsData) window.AssignmentsData.populateSettings();
   el("settings-overlay").classList.add("open");
 };
 el("btn-dash-settings").addEventListener("click", window.openMergedSettings);
@@ -70,7 +84,8 @@ el("btn-export").addEventListener("click", () => {
     kind: "command-backup",
     exportedAt: new Date().toISOString(),
     checklist: window.ChecklistData ? window.ChecklistData.getState() : null,
-    workout: window.WorkoutData ? window.WorkoutData.getState() : null
+    workout: window.WorkoutData ? window.WorkoutData.getState() : null,
+    assignments: window.AssignmentsData ? window.AssignmentsData.getState() : null
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -93,6 +108,7 @@ el("file-import").addEventListener("change", (e) => {
       if (parsed.kind === "command-backup") {
         if (parsed.checklist && window.ChecklistData) window.ChecklistData.setState(parsed.checklist);
         if (parsed.workout && window.WorkoutData) window.WorkoutData.setState(parsed.workout);
+        if (parsed.assignments && window.AssignmentsData) window.AssignmentsData.setState(parsed.assignments);
       } else if (parsed.tasks && parsed.settings) {
         // legacy checklist-only backup (pre-merge)
         if (window.ChecklistData) window.ChecklistData.setState(parsed);
@@ -111,9 +127,10 @@ el("file-import").addEventListener("change", (e) => {
 });
 
 el("btn-reset-all").addEventListener("click", () => {
-  if (confirm("Wipe ALL data — checklist tasks, streak history, and workout logs? This cannot be undone.")) {
+  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, and assignments? This cannot be undone.")) {
     if (window.ChecklistData) window.ChecklistData.wipe();
     if (window.WorkoutData) window.WorkoutData.wipe();
+    if (window.AssignmentsData) window.AssignmentsData.wipe();
     el("settings-overlay").classList.remove("open");
     refreshDashboard();
     window.showToast("ALL DATA WIPED");
