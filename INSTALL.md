@@ -63,9 +63,9 @@ fields a given exercise actually needs (e.g. Sets + Distance for a
 farmer carry, Sets + Duration for a plank). This applies in both the
 freeform builder and program session editor.
 
-**Dashboard** — three tiles (Checklist, Workouts, Assignments), each
-showing a live stat. Tap a tile to enter that module, tap the back arrow
-in its header to return.
+**Dashboard** — four tiles (Checklist, Workouts, Assignments, Targets),
+each showing a live stat. Tap a tile to enter that module, tap the back
+arrow in its header to return.
 
 **Checklist**
 - Tap **+** to add a task. Choose **repeating** or **one-off**, and
@@ -152,6 +152,31 @@ Workouts.
 - Overdue assignments (past due date, not completed) get the same red
   highlight as an overdue checklist task.
 - A completed assignment can be reopened if you're not actually done.
+
+**Targets** — habit elimination, tracked as the inverse of the checklist:
+every day you *don't* log the habit is a day of progress, and logging it
+resets the count. No reset time, no daily interaction required — it just
+runs in the background off the calendar.
+- **+ Add Target** offers four quick presets (Pornography, Weed, Smoking,
+  Alcohol) or a custom one — name, a reason for wanting it gone, and a
+  target day count (90 by default, adjustable any time via the stepper).
+- The big streak readout and 30-day history strip reuse the same
+  components as the checklist's main streak header — green for clean
+  days, red for a relapse.
+- **"Terminated" isn't a locked state** — it's simply what shows once
+  your current unbroken streak reaches the target. There's no separate
+  status to manage; it's computed live from your start date and relapse
+  log, so a relapse after termination just flips it back to "in
+  progress" automatically.
+- **Log Relapse** opens a short form: the date it happened (editable, in
+  case you're logging it a day late), what triggered it, what you'll do
+  differently, optional notes, and a chance to adjust the target if it
+  wasn't realistic. The streak recalculates immediately.
+- The start date can only be edited before the first relapse is logged,
+  so the streak math can't be retroactively thrown off once real history
+  exists.
+- Relapse history is kept per target, tap any entry to expand the full
+  notes.
 
 
 ## A few things worth knowing

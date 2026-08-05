@@ -67,6 +67,19 @@
         <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
       </span>
     </button>
+
+    <button class="tile corner-bracket" id="tile-targets">
+      <span class="tile-icon">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+      </span>
+      <span class="tile-body">
+        <div class="tile-title">TARGETS</div>
+        <div class="tile-sub" id="dash-targets-stat">0 TRACKED</div>
+      </span>
+      <span class="tile-chevron">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
+      </span>
+    </button>
   </div>
 </div>
 
@@ -194,6 +207,23 @@
       <span>COMPLETED</span>
     </button>
   </div>
+</div>
+
+<!-- ============================================================
+     TARGETS VIEW
+     ============================================================ -->
+<div id="view-targets" class="view" hidden>
+  <div class="top-strip" id="tg-top-strip">
+    <button id="btn-targets-back" class="icon-btn" aria-label="Back to dashboard">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <div class="top-title">TARGETS</div>
+    <button id="btn-targets-settings" class="icon-btn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.4 7.4 0 000-2l2.1-1.6a.5.5 0 00.1-.6l-2-3.4a.5.5 0 00-.6-.2l-2.5 1a7.6 7.6 0 00-1.7-1L14.4 2a.5.5 0 00-.5-.4h-4a.5.5 0 00-.5.4l-.4 2.6a7.6 7.6 0 00-1.7 1l-2.5-1a.5.5 0 00-.6.2l-2 3.4a.5.5 0 00.1.6L4.6 11a7.4 7.4 0 000 2l-2.1 1.6a.5.5 0 00-.1.6l2 3.4a.5.5 0 00.6.2l2.5-1a7.6 7.6 0 001.7 1l.4 2.6a.5.5 0 00.5.4h4a.5.5 0 00.5-.4l.4-2.6a7.6 7.6 0 001.7-1l2.5 1a.5.5 0 00.6-.2l2-3.4a.5.5 0 00-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
+    </button>
+  </div>
+
+  <div id="targets-screen"></div>
 </div>
 
 <!-- ============================================================
@@ -461,11 +491,87 @@
   </div>
 </div>
 
+<!-- TARGETS: preset picker sheet -->
+<div class="sheet-overlay" id="tg-preset-overlay">
+  <div class="sheet corner-bracket" id="tg-preset-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3>NEW TARGET</h3>
+      <button class="icon-btn" id="btn-close-tg-preset"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint-text" style="margin-bottom:14px;">Pick a common one, or start from scratch.</p>
+      <div class="preset-grid">
+        <button class="preset-card" data-preset="Pornography">
+          <div class="pc-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div>
+          <div class="pc-name">Pornography</div>
+        </button>
+        <button class="preset-card" data-preset="Weed">
+          <div class="pc-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div>
+          <div class="pc-name">Weed</div>
+        </button>
+        <button class="preset-card" data-preset="Smoking">
+          <div class="pc-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div>
+          <div class="pc-name">Smoking</div>
+        </button>
+        <button class="preset-card" data-preset="Alcohol">
+          <div class="pc-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div>
+          <div class="pc-name">Alcohol</div>
+        </button>
+      </div>
+      <button class="wk-dashed-card" style="width:100%; text-align:center;" id="btn-tg-preset-custom">+ CUSTOM TARGET</button>
+    </div>
+  </div>
+</div>
+
+<!-- TARGETS: log relapse sheet -->
+<div class="sheet-overlay" id="tg-relapse-overlay">
+  <div class="sheet corner-bracket" id="tg-relapse-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3>LOG RELAPSE</h3>
+      <button class="icon-btn" id="btn-close-tg-relapse"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <label class="field-label" style="margin-top:0;">DATE</label>
+      <div class="calendar-panel corner-bracket" id="tg-relapse-cal-panel">
+        <div class="cal-header">
+          <button type="button" id="tg-relapse-cal-prev" class="icon-btn small">‹</button>
+          <div id="tg-relapse-cal-label">--</div>
+          <button type="button" id="tg-relapse-cal-next" class="icon-btn small">›</button>
+        </div>
+        <div class="cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+        <div class="cal-grid" id="tg-relapse-cal-grid"></div>
+      </div>
+
+      <label class="field-label">WHAT TRIGGERED IT?</label>
+      <textarea id="tg-relapse-trigger" class="text-input" maxlength="400" placeholder="Situation, feeling, environment..."></textarea>
+
+      <label class="field-label">WHAT WILL YOU DO DIFFERENTLY?</label>
+      <textarea id="tg-relapse-adjustment" class="text-input" maxlength="400" placeholder="A concrete change for next time"></textarea>
+
+      <label class="field-label">NOTES (OPTIONAL)</label>
+      <textarea id="tg-relapse-notes" class="text-input" maxlength="400" placeholder="Anything else worth remembering"></textarea>
+
+      <label class="field-label">TARGET (DAYS)</label>
+      <div class="stepper">
+        <button type="button" id="tg-relapse-target-minus">−</button>
+        <div class="stepper-value" id="tg-relapse-target-value">90</div>
+        <button type="button" id="tg-relapse-target-plus">+</button>
+      </div>
+      <p class="hint-text" style="margin-top:-6px;">Adjust if the current target isn't realistic — this becomes the new target going forward.</p>
+
+      <button class="btn-primary" id="btn-tg-relapse-confirm">LOG RELAPSE &amp; RESTART</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="checklist.js"></script>
 <script src="workout.js"></script>
 <script src="assignments.js"></script>
+<script src="targets.js"></script>
 <script src="shell.js"></script>
 </body>
 </html>

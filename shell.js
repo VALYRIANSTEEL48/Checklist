@@ -8,7 +8,7 @@
 "use strict";
 
 const el = (id) => document.getElementById(id);
-const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments"];
+const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments", "view-targets"];
 
 function showView(id) {
   VIEWS.forEach((v) => { el(v).hidden = v !== id; });
@@ -26,6 +26,9 @@ function refreshDashboard() {
   if (window.AssignmentsData) {
     const n = window.AssignmentsData.activeCount();
     el("dash-assignments-stat").textContent = n + " ACTIVE";
+  }
+  if (window.TargetsData) {
+    el("dash-targets-stat").textContent = window.TargetsData.trackedCount() + " TRACKED";
   }
 }
 
@@ -54,16 +57,26 @@ function openAssignments() {
     console.error("Failed to open Assignments:", err);
   }
 }
+function openTargets() {
+  showView("view-targets");
+  try {
+    if (window.TargetsData) window.TargetsData.goHome();
+  } catch (err) {
+    console.error("Failed to open Targets:", err);
+  }
+}
 
 el("tile-checklist").addEventListener("click", openChecklist);
 el("tile-workout").addEventListener("click", openWorkout);
 el("tile-assignments").addEventListener("click", openAssignments);
+el("tile-targets").addEventListener("click", openTargets);
 
 /* ---------- MERGED SETTINGS SHEET ---------- */
 window.openMergedSettings = function () {
   if (window.ChecklistData) window.ChecklistData.populateSettings();
   if (window.WorkoutData) window.WorkoutData.populateSettings();
   if (window.AssignmentsData) window.AssignmentsData.populateSettings();
+  if (window.TargetsData) window.TargetsData.populateSettings();
   el("settings-overlay").classList.add("open");
 };
 el("btn-dash-settings").addEventListener("click", window.openMergedSettings);
@@ -85,7 +98,8 @@ el("btn-export").addEventListener("click", () => {
     exportedAt: new Date().toISOString(),
     checklist: window.ChecklistData ? window.ChecklistData.getState() : null,
     workout: window.WorkoutData ? window.WorkoutData.getState() : null,
-    assignments: window.AssignmentsData ? window.AssignmentsData.getState() : null
+    assignments: window.AssignmentsData ? window.AssignmentsData.getState() : null,
+    targets: window.TargetsData ? window.TargetsData.getState() : null
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -109,6 +123,7 @@ el("file-import").addEventListener("change", (e) => {
         if (parsed.checklist && window.ChecklistData) window.ChecklistData.setState(parsed.checklist);
         if (parsed.workout && window.WorkoutData) window.WorkoutData.setState(parsed.workout);
         if (parsed.assignments && window.AssignmentsData) window.AssignmentsData.setState(parsed.assignments);
+        if (parsed.targets && window.TargetsData) window.TargetsData.setState(parsed.targets);
       } else if (parsed.tasks && parsed.settings) {
         // legacy checklist-only backup (pre-merge)
         if (window.ChecklistData) window.ChecklistData.setState(parsed);
@@ -127,10 +142,11 @@ el("file-import").addEventListener("change", (e) => {
 });
 
 el("btn-reset-all").addEventListener("click", () => {
-  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, and assignments? This cannot be undone.")) {
+  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, assignments, and targets? This cannot be undone.")) {
     if (window.ChecklistData) window.ChecklistData.wipe();
     if (window.WorkoutData) window.WorkoutData.wipe();
     if (window.AssignmentsData) window.AssignmentsData.wipe();
+    if (window.TargetsData) window.TargetsData.wipe();
     el("settings-overlay").classList.remove("open");
     refreshDashboard();
     window.showToast("ALL DATA WIPED");
