@@ -14,11 +14,42 @@
   --font-head:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
   --font-mono:ui-monospace,'Roboto Mono','SFMono-Regular',Consolas,'Courier New',monospace;
 }
+/* "shadow" (the default look, defined on :root above) used to be called
+   BLACKOUT — but it has a faint dark-olive cast, so BLACKOUT was
+   reassigned below to a genuinely neutral black/grey, and this one
+   renamed. Old saved settings with tone:"black" are migrated to
+   tone:"shadow" on load (see checklist.js) and render identically. */
+body[data-tone="blackout"]{
+  --bg:#070707; --panel:#141414; --panel-alt:#1A1A1A; --border:#2E2E2E;
+}
 body[data-tone="olive"]{
   --bg:#12140D; --panel:#181B10; --panel-alt:#1D2113; --border:#33371F;
 }
 body[data-tone="slate"]{
   --bg:#0C0E12; --panel:#141821; --panel-alt:#181D27; --border:#2A3140;
+}
+body[data-tone="desert"]{
+  --bg:#14110A; --panel:#1C1710; --panel-alt:#241D13; --border:#3A2F1D;
+}
+body[data-tone="crimson"]{
+  --bg:#12090A; --panel:#1A0E0F; --panel-alt:#211214; --border:#3A1A1C;
+}
+
+/* ===== NIGHT MODE =====
+   An automatic, time-windowed overlay layered on top of whatever tone/
+   accent the person has chosen — not a swap to a fixed "blackout + red"
+   combo, which would be invisible to someone who already runs that combo
+   during the day. It's deliberately its own palette (deeper black,
+   genuinely red-shifted, dimmer warm text) so engaging it is always
+   noticeable, then reverts to exactly what was active before once the
+   window ends. Applied as a class on <body>, same specificity as the
+   data-tone rules above but declared after them, so it always wins
+   without touching the person's saved tone/accent preference. */
+body.night-mode{
+  --bg:#050201; --panel:#0D0603; --panel-alt:#150905; --border:#2B140C;
+  --text:#D9C2AE; --text-dim:#8C6C55;
+  --accent:#9A4128; --accent-dim:#652C1A;
+  --success:#6E7A50; --danger:#A6392A;
 }
 
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -30,6 +61,13 @@ body{
   padding-top:env(safe-area-inset-top);
   padding-bottom:env(safe-area-inset-bottom);
 }
+/* Cross-fade for tone switches and night-mode engage/disengage, so the
+   whole-app color shift reads as a transition rather than a hard cut.
+   Elements with their own more specific `transition` (e.g. .task-item)
+   need background-color/color folded into that rule directly — a
+   `transition` declaration replaces the whole property, it doesn't merge
+   across rules of different specificity. */
+body, body *{ transition: background-color .8s ease, border-color .8s ease, color .8s ease; }
 button, input{ font-family:inherit; color:inherit; }
 button{ background:none; border:none; cursor:pointer; }
 ul{ list-style:none; margin:0; padding:0; }
@@ -100,7 +138,7 @@ ul{ list-style:none; margin:0; padding:0; }
   display:flex; align-items:center; gap:12px;
   background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--border);
   padding:12px 12px; margin-bottom:8px; border-radius:var(--radius);
-  transition:border-color .15s, opacity .15s, transform .15s;
+  transition:border-color .15s, opacity .15s, transform .15s, background-color .8s ease, color .8s ease;
 }
 .task-item.done{ border-left-color:var(--success); }
 .task-item.overdue{ border-left-color:var(--danger); }
@@ -203,6 +241,21 @@ ul{ list-style:none; margin:0; padding:0; }
 .swatch{ width:32px; height:32px; border-radius:50%; border:2px solid transparent; }
 .swatch.selected{ border-color:var(--text); }
 .custom-swatch{ padding:0; border:2px solid var(--border); background:none; }
+
+.tone-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.tone-swatch{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius);
+  padding:8px 4px 10px; font-size:9px; letter-spacing:1px; color:var(--text-dim); font-weight:700;
+}
+.tone-swatch.active{ border-color:var(--accent); color:var(--text); }
+.ts-preview{ width:100%; height:26px; border-radius:2px; border:1px solid rgba(255,255,255,.08); }
+
+.night-mode-window{ margin-top:10px; }
+.night-mode-status{ display:flex; align-items:center; gap:6px; font-size:11px; letter-spacing:1px; color:var(--text-dim); margin:0 0 10px; font-family:var(--font-mono); }
+.night-mode-status .dot{ width:7px; height:7px; border-radius:50%; background:var(--text-dim); flex-shrink:0; }
+.night-mode-status.active .dot{ background:var(--accent); }
+.night-mode-status.active{ color:var(--accent); }
 
 .action-sheet .sheet-body{ padding-top:4px; }
 .action-task-name{ text-align:center; font-size:13px; letter-spacing:1px; color:var(--text-dim); margin-bottom:14px; }

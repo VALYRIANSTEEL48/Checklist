@@ -1292,6 +1292,17 @@ function activeScreenHTML() {
     </div>`;
 }
 
+/* ---------- DURATION (startTime/endTime -> readable label) ---------- */
+function formatDuration(startISO, endISO) {
+  if (!startISO || !endISO) return null;
+  const ms = new Date(endISO) - new Date(startISO);
+  if (!isFinite(ms) || ms <= 0) return null;
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}H ${m}M` : `${m}M`;
+}
+
 /* ---------- HISTORY SCREEN ---------- */
 function historyScreenHTML() {
   if (!state.history.length) {
@@ -1308,9 +1319,10 @@ function historyScreenHTML() {
     ${grouped[month].map((w) => {
       const count = completedExercisesOf(w).length;
       const progTag = w.programId ? `<span class="status-badge active" style="margin-left:6px;">PROGRAM</span>` : "";
+      const dur = formatDuration(w.startTime, w.endTime);
       return `<button class="wk-history-row" data-open-history="${w.id}">
         <span><span class="hr-name">${escapeHTML(w.templateName)}${progTag}</span><br><span class="hr-sub">${escapeHTML(w.variantName)}</span></span>
-        <span><span class="hr-date">${fmtWeekdayShort(w.date)}</span><br><span class="hr-count">${count} exercise${count !== 1 ? "s" : ""}</span></span>
+        <span><span class="hr-date">${fmtWeekdayShort(w.date)}</span><br><span class="hr-count">${count} exercise${count !== 1 ? "s" : ""}${dur ? " · " + dur : ""}</span></span>
       </button>`;
     }).join("")}`).join("");
   return `<h1 class="screen-h1">WORKOUT HISTORY</h1>${blocks}`;
@@ -1777,6 +1789,35 @@ function attachExerciseAutocomplete(inputEl, onPick) {
 /* ---------- REST TIMER ---------- */
 let restTimerState = null; // { exIdx, endsAt }
 let restTimerHandle = null;
+let restAudioCtx = null;
+
+// Two short ascending beeps via WebAudio — no audio asset file needed, and
+// this is cheap enough to build on demand rather than keep a <audio> tag
+// around. Reuses one AudioContext across the session (browsers cap how
+// many can be created). Wrapped defensively: a blocked/unavailable
+// AudioContext should never take down the rest timer itself, and
+// navigator.vibrate is likewise best-effort (desktop browsers lack it).
+function playRestCompleteAlert() {
+  try {
+    if (!restAudioCtx) restAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (restAudioCtx.state === "suspended") restAudioCtx.resume();
+    const now = restAudioCtx.currentTime;
+    [{ t: 0, f: 880 }, { t: 0.16, f: 1174.7 }].forEach(({ t, f }) => {
+      const osc = restAudioCtx.createOscillator();
+      const gain = restAudioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.0001, now + t);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.18);
+      osc.connect(gain);
+      gain.connect(restAudioCtx.destination);
+      osc.start(now + t);
+      osc.stop(now + t + 0.2);
+    });
+  } catch (e) { /* audio unavailable — toast + vibration still fire */ }
+  try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* ignore */ }
+}
 function startRestTimer(exIdx) {
   const ex = activeWorkout.exercises[exIdx];
   const seconds = Number(ex.log.restBetweenSets) || 60;
@@ -1793,6 +1834,7 @@ function tickRestTimer() {
     restTimerState = null;
     if (btn && idleLabel) { btn.textContent = idleLabel; btn.classList.remove("running"); }
     window.showToast && window.showToast("REST COMPLETE");
+    playRestCompleteAlert();
     return;
   }
   if (btn) { btn.textContent = `RESTING… ${remaining}s`; btn.classList.add("running"); }
@@ -1986,8 +2028,9 @@ function openHistoryDetail(id) {
   const w = state.history.find((x) => x.id === id);
   if (!w) return;
   selectedHistoryId = id;
+  const dur = formatDuration(w.startTime, w.endTime);
   el("wk-detail-title").textContent = w.templateName;
-  el("wk-detail-sub").textContent = `${w.variantName} · ${fmtFullDate(w.date)}`;
+  el("wk-detail-sub").textContent = `${w.variantName} · ${fmtFullDate(w.date)}${dur ? " · " + dur : ""}`;
   const exercises = completedExercisesOf(w);
   el("wk-detail-body").innerHTML = exercises.length ? exercises.map(detailBlockHTML).join("") : `<p class="hint-text">No completed sets recorded.</p>`;
   el("wk-detail-ex-count").textContent = exercises.length;

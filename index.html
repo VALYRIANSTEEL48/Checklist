@@ -344,10 +344,36 @@
       </div>
 
       <label class="field-label">PANEL TONE</label>
-      <div class="segmented" id="seg-tone">
-        <button class="seg-btn active" data-val="black">BLACKOUT</button>
-        <button class="seg-btn" data-val="olive">OLIVE DRAB</button>
-        <button class="seg-btn" data-val="slate">GUNMETAL</button>
+      <div class="tone-grid" id="tone-grid">
+        <button class="tone-swatch" data-val="shadow"><span class="ts-preview" style="background:#12160F"></span>SHADOW</button>
+        <button class="tone-swatch" data-val="blackout"><span class="ts-preview" style="background:#141414"></span>BLACKOUT</button>
+        <button class="tone-swatch" data-val="slate"><span class="ts-preview" style="background:#141821"></span>GUNMETAL</button>
+        <button class="tone-swatch" data-val="olive"><span class="ts-preview" style="background:#181B10"></span>OLIVE DRAB</button>
+        <button class="tone-swatch" data-val="desert"><span class="ts-preview" style="background:#1C1710"></span>DESERT</button>
+        <button class="tone-swatch" data-val="crimson"><span class="ts-preview" style="background:#1A0E0F"></span>CRIMSON</button>
+      </div>
+
+      <label class="field-label">NIGHT MODE</label>
+      <div class="segmented" id="seg-night-mode">
+        <button class="seg-btn" data-val="off">OFF</button>
+        <button class="seg-btn active" data-val="auto">AUTO</button>
+        <button class="seg-btn" data-val="on">ON</button>
+      </div>
+      <div class="night-mode-window" id="night-mode-window">
+        <p class="night-mode-status" id="night-mode-status"><span class="dot"></span><span id="night-mode-status-text">CURRENTLY DAY</span></p>
+        <div class="row-2">
+          <div>
+            <label class="field-label">STARTS</label>
+            <input type="time" id="input-night-start" class="text-input">
+          </div>
+          <div>
+            <label class="field-label">ENDS</label>
+            <input type="time" id="input-night-end" class="text-input">
+          </div>
+        </div>
+        <p class="hint-text">A deliberately different palette from anything you can pick above — deeper
+        black, red-shifted, dimmer — so it's noticeable even if you already run Blackout + a red accent
+        by day. Fades in/out instead of cutting.</p>
       </div>
 
       <label class="field-label">DATA (CHECKLIST + WORKOUTS)</label>

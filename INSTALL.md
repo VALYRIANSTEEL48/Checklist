@@ -133,9 +133,28 @@ interval days mixed in), not just quick ad-hoc sessions:
 
 **Settings** (gear icon, reachable from the dashboard or either module)
 covers both apps in one place: checklist reset time, workout weekly
-target, accent color, panel tone, and export/import/wipe — which now
-back up and restore **both** datasets together in one JSON file
+target, accent color, panel tone, night mode, and export/import/wipe —
+which now back up and restore **both** datasets together in one JSON file
 (including all programs).
+
+**Panel tone** — six options: Shadow (the original near-black default),
+Blackout (true neutral black/grey), Gunmetal, Olive Drab, Desert, and
+Crimson. Each shows a small color preview so you can tell them apart at a
+glance.
+
+**Night mode** — Off / Auto / On. Auto applies automatically during a
+time window you set (default 9 PM–6 AM) and uses its own dedicated
+palette — deeper black, red-shifted, dimmer text — rather than just
+switching to Blackout + a red accent, so it's noticeable even if that's
+already your daytime combo. Colors fade in/out over about a second rather
+than cutting abruptly, and it never touches your saved tone/accent
+preference — it reverts to exactly what you had once the window ends.
+
+**Rest timer** — now chimes (two short tones) and vibrates the device
+when it finishes, in addition to the visual countdown.
+
+**Workout duration** — completed workouts now show how long they took,
+both in History and in a workout's detail view.
 
 **Exercise library** — any exercise you name gets remembered automatically
 (no separate save step). Start typing a name anywhere and matching past

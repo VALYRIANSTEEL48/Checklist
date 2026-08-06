@@ -17,7 +17,10 @@ function defaultState() {
       resetHour: 0,
       resetMinute: 0,
       accent: "#D98E2B",
-      tone: "black"
+      tone: "shadow",
+      nightMode: "auto",   // "off" | "auto" | "on"
+      nightStart: "21:00",
+      nightEnd: "06:00"
     },
     tasks: []
   };
@@ -32,8 +35,13 @@ function load() {
     const parsed = JSON.parse(raw);
     // shallow-merge to survive future schema additions
     const base = defaultState();
+    const settings = Object.assign(base.settings, parsed.settings || {});
+    // "black" was BLACKOUT's old internal name before that label got
+    // reassigned to a new, genuinely neutral tone — renders identically,
+    // just needed a new key so the settings UI highlights the right swatch.
+    if (settings.tone === "black") settings.tone = "shadow";
     return {
-      settings: Object.assign(base.settings, parsed.settings || {}),
+      settings,
       tasks: Array.isArray(parsed.tasks) ? parsed.tasks : []
     };
   } catch (e) {
@@ -239,6 +247,49 @@ const el = (id) => document.getElementById(id);
 function applyTheme() {
   document.documentElement.style.setProperty("--accent", state.settings.accent);
   document.body.setAttribute("data-tone", state.settings.tone);
+  applyNightMode();
+}
+
+/* ---------- NIGHT MODE ----------
+   Auto/On/Off, layered on top of the chosen tone via a body class (see
+   style.css) rather than swapping to a fixed tone+accent combo — that
+   would look identical to whatever a person already has selected. AUTO
+   re-checks the clock on its own timer so the transition actually fires
+   while the app is left open across the boundary, not just on next
+   launch. */
+function minutesOf(hhmm) {
+  const [h, m] = (hhmm || "00:00").split(":").map(Number);
+  return h * 60 + m;
+}
+function isWithinNightWindow(now) {
+  now = now || new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const start = minutesOf(state.settings.nightStart);
+  const end = minutesOf(state.settings.nightEnd);
+  if (start === end) return false;
+  if (start < end) return nowMin >= start && nowMin < end;
+  return nowMin >= start || nowMin < end; // window wraps past midnight
+}
+function shouldBeNightMode() {
+  if (state.settings.nightMode === "on") return true;
+  if (state.settings.nightMode === "off") return false;
+  return isWithinNightWindow();
+}
+function applyNightMode() {
+  const active = shouldBeNightMode();
+  const wasActive = document.body.classList.contains("night-mode");
+  document.body.classList.toggle("night-mode", active);
+  if (active !== wasActive && state.settings.nightMode === "auto" && window.showToast) {
+    window.showToast(active ? "NIGHT MODE ENGAGED" : "NIGHT MODE DISENGAGED");
+  }
+  updateNightModeStatusLabel(active);
+}
+function updateNightModeStatusLabel(active) {
+  const label = el("night-mode-status-text");
+  const wrap = el("night-mode-status");
+  if (!label || !wrap) return;
+  label.textContent = active ? "CURRENTLY NIGHT" : "CURRENTLY DAY";
+  wrap.classList.toggle("active", active);
 }
 
 function render() {
@@ -398,7 +449,18 @@ function toggleComplete(taskId) {
   render();
 }
 
-/* ---------- DRAG REORDER (anytime list) ---------- */
+/* ---------- DRAG REORDER (anytime list) ----------
+   Pointer-capture-only implementations of this are fragile: the drag
+   handle is a small ~20px icon, and the moment a finger moves off of it
+   the move/up events stop being delivered to that element unless capture
+   is in effect for the *entire* document, not just the handle. If
+   setPointerCapture throws (invalid pointerId, or a WebView with partial
+   Pointer Events support) or behaves inconsistently, the gesture would
+   silently die after pointerdown — the item dims into "dragging" state
+   and then never receives another event. Listening on `document` instead
+   of the handle itself is the robust pattern: it doesn't depend on
+   capture succeeding at all. Also defensively bails out (instead of
+   throwing) if a re-render replaces the list mid-gesture. */
 let dragState = null;
 function attachDragHandlers() {
   document.querySelectorAll("[data-drag]").forEach((handle) => {
@@ -410,18 +472,20 @@ function startDrag(e, handle) {
   e.preventDefault();
   const li = handle.closest("li.task-item");
   const list = el("list-anytime");
-  const items = Array.from(list.children);
-  dragState = { id: handle.getAttribute("data-drag"), li, list, items, startY: e.clientY };
+  if (!li || !list) return;
+  dragState = { id: handle.getAttribute("data-drag"), li, list };
   li.classList.add("dragging");
-  handle.setPointerCapture(e.pointerId);
-  handle.onpointermove = onDragMove;
-  handle.onpointerup = (ev) => endDrag(ev, handle);
-  handle.onpointercancel = (ev) => endDrag(ev, handle);
+  try { handle.setPointerCapture(e.pointerId); } catch (err) { /* best-effort only */ }
+  document.addEventListener("pointermove", onDragMove);
+  document.addEventListener("pointerup", endDrag);
+  document.addEventListener("pointercancel", endDrag);
 }
 
 function onDragMove(e) {
   if (!dragState) return;
   const { list, li } = dragState;
+  if (!document.contains(li) || !document.contains(list)) { cancelDrag(); return; }
+  e.preventDefault();
   const y = e.clientY;
   const siblings = Array.from(list.children).filter((c) => c !== li);
   let placed = false;
@@ -436,18 +500,31 @@ function onDragMove(e) {
   if (!placed) list.appendChild(li);
 }
 
-function endDrag(e, handle) {
-  handle.onpointermove = null;
-  handle.onpointerup = null;
-  handle.onpointercancel = null;
+function stopDragListeners() {
+  document.removeEventListener("pointermove", onDragMove);
+  document.removeEventListener("pointerup", endDrag);
+  document.removeEventListener("pointercancel", endDrag);
+}
+
+// Bails out without persisting anything — used when the list was
+// replaced out from under an in-progress drag (e.g. a background render).
+function cancelDrag() {
+  stopDragListeners();
+  dragState = null;
+}
+
+function endDrag() {
+  stopDragListeners();
   if (!dragState) return;
-  dragState.li.classList.remove("dragging");
-  const orderedIds = Array.from(dragState.list.children).map((li) => li.getAttribute("data-task"));
+  const { list, li } = dragState;
+  dragState = null;
+  if (!document.contains(li) || !document.contains(list)) return;
+  li.classList.remove("dragging");
+  const orderedIds = Array.from(list.children).map((row) => row.getAttribute("data-task"));
   orderedIds.forEach((id, idx) => {
     const t = state.tasks.find((x) => x.id === id);
     if (t) t.order = idx;
   });
-  dragState = null;
   save();
   render();
 }
@@ -632,7 +709,14 @@ function populateSettingsFields() {
     s.classList.toggle("selected", s.getAttribute("data-color").toLowerCase() === state.settings.accent.toLowerCase());
   });
   el("custom-color").value = state.settings.accent;
-  setSeg("seg-tone", state.settings.tone);
+  document.querySelectorAll(".tone-swatch[data-val]").forEach((s) => {
+    s.classList.toggle("active", s.getAttribute("data-val") === state.settings.tone);
+  });
+  setSeg("seg-night-mode", state.settings.nightMode);
+  el("input-night-start").value = state.settings.nightStart;
+  el("input-night-end").value = state.settings.nightEnd;
+  el("night-mode-window").style.display = state.settings.nightMode === "auto" ? "block" : "none";
+  updateNightModeStatusLabel(shouldBeNightMode());
 }
 
 el("input-reset-time").addEventListener("change", (e) => {
@@ -652,12 +736,30 @@ el("custom-color").addEventListener("input", (e) => {
   save(); applyTheme(); render();
 });
 
-document.querySelectorAll("#seg-tone .seg-btn").forEach((btn) => {
+document.querySelectorAll(".tone-swatch[data-val]").forEach((btn) => {
   btn.addEventListener("click", () => {
-    setSeg("seg-tone", btn.getAttribute("data-val"));
+    document.querySelectorAll(".tone-swatch[data-val]").forEach((s) => s.classList.remove("active"));
+    btn.classList.add("active");
     state.settings.tone = btn.getAttribute("data-val");
     save(); applyTheme();
   });
+});
+
+document.querySelectorAll("#seg-night-mode .seg-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setSeg("seg-night-mode", btn.getAttribute("data-val"));
+    state.settings.nightMode = btn.getAttribute("data-val");
+    el("night-mode-window").style.display = state.settings.nightMode === "auto" ? "block" : "none";
+    save(); applyTheme();
+  });
+});
+el("input-night-start").addEventListener("change", (e) => {
+  state.settings.nightStart = e.target.value;
+  save(); applyTheme();
+});
+el("input-night-end").addEventListener("change", (e) => {
+  state.settings.nightEnd = e.target.value;
+  save(); applyTheme();
 });
 
 // Shared interface so shell.js can open the merged settings sheet, and
@@ -738,9 +840,13 @@ let lastTrackingDate = getTrackingDateStr();
 setInterval(() => {
   const now = getTrackingDateStr();
   if (now !== lastTrackingDate) { lastTrackingDate = now; render(); }
+  // Re-checked on the same cadence so AUTO night mode actually engages/
+  // disengages right at the boundary while the app is left open, not
+  // just picked up on next launch.
+  applyNightMode();
 }, 30000);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") render();
+  if (document.visibilityState === "visible") { applyNightMode(); render(); }
 });
 
 /* ---------- INIT ---------- */
