@@ -69,7 +69,7 @@ body{
    across rules of different specificity. */
 body, body *{ transition: background-color .8s ease, border-color .8s ease, color .8s ease; }
 button, input{ font-family:inherit; color:inherit; }
-button{ background:none; border:none; cursor:pointer; }
+button{ background:none; border:none; cursor:pointer; appearance:none; -webkit-appearance:none; }
 ul{ list-style:none; margin:0; padding:0; }
 
 #app{ max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; }

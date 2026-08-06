@@ -1,4 +1,4 @@
-const CACHE = "checklist-v8";
+const CACHE = "checklist-v9";
 const ASSETS = [
   "./",
   "./index.html",
@@ -35,8 +35,18 @@ self.addEventListener("fetch", (e) => {
   // actually offline). This is intentionally NOT cache-first — during
   // active development, a cache-first strategy can keep serving an old,
   // already-fixed bug indefinitely even after new files are uploaded.
+  //
+  // { cache: "no-store" } matters here and is not redundant with the
+  // "network-first" idea above: without it, this fetch() still goes
+  // through the *browser's* own HTTP cache (a layer below the service
+  // worker), which can quietly hand back a stale response — e.g. a
+  // previously-cached checklist.js — even though we "tried the network."
+  // That produces a genuinely confusing bug class: index.html updates
+  // (it's the navigation request, usually revalidated) but a .js file
+  // doesn't, so the page looks like it has new UI wired to old logic.
+  // no-store forces an actual round-trip every time we're online.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: "no-store" })
       .then((res) => {
         if (res && res.status === 200) {
           const copy = res.clone();
