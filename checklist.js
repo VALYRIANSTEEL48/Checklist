@@ -674,7 +674,32 @@ window.ChecklistData = {
     save(); applyTheme(); render();
   },
   populateSettings: populateSettingsFields,
-  mainStreak: () => computeMainStreak()
+  mainStreak: () => computeMainStreak(),
+  // Dashboard SITREP summary: today's due/done counts and the next
+  // not-yet-done scheduled task (by time, falling back to the first
+  // remaining task of any kind). Resolved on demand, nothing stored.
+  todaySummary: () => {
+    const today = getTrackingDateStr();
+    const due = getDueTasks(today);
+    const remaining = due.filter((t) => !isCompletedOn(t, today));
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const scheduledRemaining = remaining
+      .filter((t) => t.timing === "scheduled" && t.time)
+      .sort((a, b) => a.time.localeCompare(b.time));
+    const upcoming = scheduledRemaining.find((t) => {
+      const [h, m] = t.time.split(":").map(Number);
+      return h * 60 + m >= nowMin;
+    });
+    const next = upcoming || scheduledRemaining[0] || remaining[0] || null;
+    return {
+      streak: computeMainStreak(),
+      due: due.length,
+      done: due.length - remaining.length,
+      remaining: remaining.length,
+      next: next ? { name: next.name, time: (next.timing === "scheduled" && next.time) ? next.time : null } : null
+    };
+  }
 };
 
 /* ---------- SHEET PLUMBING ---------- */

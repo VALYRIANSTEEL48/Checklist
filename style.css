@@ -242,6 +242,46 @@ ul{ list-style:none; margin:0; padding:0; }
 .tile-sub .hl{ color:var(--accent); }
 .tile-chevron{ color:var(--text-dim); flex-shrink:0; }
 
+/* ---------- DASHBOARD SITREP ---------- */
+.sitrep-strip{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--panel); border:1px solid var(--border); padding:16px 18px;
+  border-radius:var(--radius); margin-bottom:14px;
+}
+.sitrep-time{ font-family:var(--font-mono); font-size:38px; font-weight:700; color:var(--text); line-height:1; letter-spacing:1px; }
+.sitrep-date{ font-family:var(--font-mono); font-size:11px; letter-spacing:2px; color:var(--text-dim); margin-top:6px; }
+.sitrep-weather{ display:flex; align-items:center; gap:8px; color:var(--text); flex-shrink:0; padding-left:16px; border-left:1px solid var(--border); }
+.sitrep-weather-icon{ color:var(--accent); display:flex; }
+.sitrep-weather-temp{ font-family:var(--font-mono); font-size:20px; font-weight:700; }
+
+.dash-lede{ display:flex; align-items:center; gap:8px; }
+.dash-lede::before{ content:""; width:7px; height:7px; background:var(--accent); transform:rotate(45deg); flex-shrink:0; }
+
+.sitrep-priority{
+  display:flex; align-items:center; gap:12px;
+  background:var(--panel); border:1px solid var(--accent); padding:12px 14px;
+  border-radius:var(--radius); margin-bottom:16px;
+}
+.sitrep-priority-icon{ color:var(--accent); flex-shrink:0; display:flex; }
+.sitrep-priority-body{ min-width:0; flex:1; }
+.sitrep-priority-label{ font-size:10px; letter-spacing:2px; color:var(--accent); font-weight:700; margin-bottom:2px; }
+.sitrep-priority-text{ font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.sitrep-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.sitrep-cell{
+  display:flex; flex-direction:column; align-items:flex-start; text-align:left;
+  background:var(--panel); border:1px solid var(--border); padding:14px 14px 16px;
+  border-radius:var(--radius); min-height:118px; box-sizing:border-box;
+}
+.sitrep-cell:active{ transform:scale(.98); }
+.sc-top{ display:flex; align-items:center; gap:7px; margin-bottom:14px; color:var(--text-dim); }
+.sc-icon{ color:var(--accent); display:flex; flex-shrink:0; }
+.sc-title{ font-size:10px; font-weight:700; letter-spacing:2px; }
+.sc-stat{ font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--accent); line-height:1.1; margin-top:auto; }
+.sc-stat-sep{ color:var(--text-dim); font-weight:400; margin:0 1px; }
+.sc-stat-text{ font-size:15px; letter-spacing:.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+.sc-sub{ font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--text-dim); margin-top:5px; }
+
 /* shared top strip used inside sub-views */
 .top-strip{ display:flex; align-items:center; gap:10px; padding:16px 16px 6px; }
 .top-strip .top-title{ flex:1; font-size:13px; font-weight:700; letter-spacing:2px; }

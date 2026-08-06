@@ -26,60 +26,72 @@
       <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.4 7.4 0 000-2l2.1-1.6a.5.5 0 00.1-.6l-2-3.4a.5.5 0 00-.6-.2l-2.5 1a7.6 7.6 0 00-1.7-1L14.4 2a.5.5 0 00-.5-.4h-4a.5.5 0 00-.5.4l-.4 2.6a7.6 7.6 0 00-1.7 1l-2.5-1a.5.5 0 00-.6.2l-2 3.4a.5.5 0 00.1.6L4.6 11a7.4 7.4 0 000 2l-2.1 1.6a.5.5 0 00-.1.6l2 3.4a.5.5 0 00.6.2l2.5-1a7.6 7.6 0 001.7 1l.4 2.6a.5.5 0 00.5.4h4a.5.5 0 00.5-.4l.4-2.6a7.6 7.6 0 001.7-1l2.5 1a.5.5 0 00.6-.2l2-3.4a.5.5 0 00-.1-.6L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/></svg>
     </button>
   </div>
+
   <div class="dash-main">
-    <div class="dash-lede">SELECT MODULE</div>
 
-    <button class="tile corner-bracket" id="tile-checklist">
-      <span class="tile-icon">
-        <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M9 16.2L4.8 12l-1.4 1.4L9 19 20.6 7.4 19.2 6z"/></svg>
-      </span>
-      <span class="tile-body">
-        <div class="tile-title">CHECKLIST</div>
-        <div class="tile-sub" id="dash-checklist-stat">STREAK 000</div>
-      </span>
-      <span class="tile-chevron">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
-      </span>
-    </button>
+    <!-- SITREP HUD strip: live clock, date, weather -->
+    <div class="sitrep-strip corner-bracket">
+      <div class="sitrep-time-block">
+        <div class="sitrep-time" id="dash-time">--:--</div>
+        <div class="sitrep-date" id="dash-date">-- · --- --</div>
+      </div>
+      <div class="sitrep-weather" id="dash-weather" hidden>
+        <span class="sitrep-weather-icon" id="dash-weather-icon"></span>
+        <span class="sitrep-weather-temp" id="dash-weather-temp">--°</span>
+      </div>
+    </div>
 
-    <button class="tile corner-bracket" id="tile-workout">
-      <span class="tile-icon">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg>
-      </span>
-      <span class="tile-body">
-        <div class="tile-title">WORKOUTS</div>
-        <div class="tile-sub" id="dash-workout-stat">0/7 THIS WEEK</div>
-      </span>
-      <span class="tile-chevron">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
-      </span>
-    </button>
+    <div class="dash-lede" id="dash-lede">SITREP</div>
 
-    <button class="tile corner-bracket" id="tile-assignments">
-      <span class="tile-icon">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>
+    <!-- Single most urgent item across all modules, when there is one -->
+    <div class="sitrep-priority corner-bracket" id="dash-priority" hidden>
+      <span class="sitrep-priority-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       </span>
-      <span class="tile-body">
-        <div class="tile-title">ASSIGNMENTS</div>
-        <div class="tile-sub" id="dash-assignments-stat">0 ACTIVE</div>
-      </span>
-      <span class="tile-chevron">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
-      </span>
-    </button>
+      <div class="sitrep-priority-body">
+        <div class="sitrep-priority-label" id="dash-priority-label">NEXT UP</div>
+        <div class="sitrep-priority-text" id="dash-priority-text">--</div>
+      </div>
+    </div>
 
-    <button class="tile corner-bracket" id="tile-targets">
-      <span class="tile-icon">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
-      </span>
-      <span class="tile-body">
-        <div class="tile-title">TARGETS</div>
-        <div class="tile-sub" id="dash-targets-stat">0 TRACKED</div>
-      </span>
-      <span class="tile-chevron">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
-      </span>
-    </button>
+    <!-- Status board: four tappable quadrants, no scrolling required -->
+    <div class="sitrep-grid">
+      <button class="sitrep-cell corner-bracket" id="tile-checklist">
+        <div class="sc-top">
+          <span class="sc-icon"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 16.2L4.8 12l-1.4 1.4L9 19 20.6 7.4 19.2 6z"/></svg></span>
+          <span class="sc-title">CHECKLIST</span>
+        </div>
+        <div class="sc-stat" id="dash-checklist-stat">0<span class="sc-stat-sep">/</span>0</div>
+        <div class="sc-sub" id="dash-checklist-sub">STREAK 000</div>
+      </button>
+
+      <button class="sitrep-cell corner-bracket" id="tile-workout">
+        <div class="sc-top">
+          <span class="sc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg></span>
+          <span class="sc-title">WORKOUT</span>
+        </div>
+        <div class="sc-stat sc-stat-text" id="dash-workout-stat">--</div>
+        <div class="sc-sub" id="dash-workout-sub">0/7 THIS WK</div>
+      </button>
+
+      <button class="sitrep-cell corner-bracket" id="tile-assignments">
+        <div class="sc-top">
+          <span class="sc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg></span>
+          <span class="sc-title">ASSIGNMENTS</span>
+        </div>
+        <div class="sc-stat" id="dash-assignments-stat">0</div>
+        <div class="sc-sub" id="dash-assignments-sub">NONE ACTIVE</div>
+      </button>
+
+      <button class="sitrep-cell corner-bracket" id="tile-targets">
+        <div class="sc-top">
+          <span class="sc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></span>
+          <span class="sc-title">TARGETS</span>
+        </div>
+        <div class="sc-stat" id="dash-targets-stat">0</div>
+        <div class="sc-sub" id="dash-targets-sub">0 TRACKED</div>
+      </button>
+    </div>
   </div>
 </div>
 

@@ -2025,7 +2025,29 @@ window.WorkoutData = {
   populateSettings: () => { el("settings-target-value").textContent = state.weeklyTarget; },
   weeklyStat: () => `${weeklyCount()}/${Math.max(1, state.weeklyTarget)} THIS WEEK`,
   refresh: () => renderWorkout(),
-  goHome: () => { screen = null; tab = "home"; renderWorkout(); }
+  goHome: () => { screen = null; tab = "home"; renderWorkout(); },
+  // Dashboard SITREP summary: today's program session (if any active
+  // program), weekly progress, and whether a workout has already been
+  // logged today. Resolved on demand from resolveSessionForDate, same as
+  // the in-module hero — nothing extra stored.
+  todaySummary: () => {
+    const today = formatDate(new Date());
+    const loggedToday = state.history.some((w) => w.date === today);
+    const wc = weeklyCount();
+    const target = Math.max(1, state.weeklyTarget);
+    const program = getActiveProgram();
+    if (!program) {
+      return { hasProgram: false, status: null, sessionName: null, loggedToday, weeklyCount: wc, weeklyTarget: target };
+    }
+    const resolved = resolveSessionForDate(program, today);
+    return {
+      hasProgram: true,
+      status: resolved.status,
+      sessionName: resolved.status === "session" ? resolved.slot.name : null,
+      programName: program.name,
+      loggedToday, weeklyCount: wc, weeklyTarget: target
+    };
+  }
 };
 
 /* ---------- INIT ---------- */

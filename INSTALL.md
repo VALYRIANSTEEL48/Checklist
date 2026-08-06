@@ -7,9 +7,10 @@ sideloaded APK. Once installed, it looks and behaves like any other app on
 your phone — icon in the app drawer, opens full-screen, works with no
 signal. All data is stored only on your phone; nothing is sent anywhere.
 
-As of this version, the app is a single **Command dashboard** with two
-modules — **Checklist** and **Workouts** — each with its own data, plus one
-shared Settings sheet.
+As of this version, the app is a single **Command dashboard** — a SITREP-style
+home screen — with four modules — **Checklist**, **Workouts**,
+**Assignments**, and **Targets** — each with its own data, plus one shared
+Settings sheet.
 
 ## Step 1 — Put the files somewhere your phone can reach over HTTPS
 
@@ -63,9 +64,13 @@ fields a given exercise actually needs (e.g. Sets + Distance for a
 farmer carry, Sets + Duration for a plank). This applies in both the
 freeform builder and program session editor.
 
-**Dashboard** — four tiles (Checklist, Workouts, Assignments, Targets),
-each showing a live stat. Tap a tile to enter that module, tap the back
-arrow in its header to return.
+**Dashboard** — a SITREP-style home screen instead of a scrolling list of
+tiles: a live clock/date (and local weather, if you grant location
+permission — this is optional and the chip just stays hidden if you don't),
+a "NEXT UP" line surfacing the single most urgent thing across every module
+(an overdue assignment, the next scheduled task, today's program session,
+etc.), and a 2×2 status board with one glanceable stat per module. Tap any
+quadrant to enter that module, tap the back arrow in its header to return.
 
 **Checklist**
 - Tap **+** to add a task. Choose **repeating** or **one-off**, and

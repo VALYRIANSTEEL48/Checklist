@@ -431,7 +431,22 @@ window.AssignmentsData = {
   wipe: () => { state = defaultState(); save(); render(); },
   populateSettings: () => {},
   activeCount: () => state.assignments.filter((a) => a.status === "in_progress").length,
-  goHome: () => { screen = null; editingId = null; draft = null; tab = "active"; render(); }
+  goHome: () => { screen = null; editingId = null; draft = null; tab = "active"; render(); },
+  // Dashboard SITREP summary: the single most pressing non-completed
+  // assignment (earliest due date; undated ones sort last), plus whether
+  // it's already overdue. Resolved on demand, same sort as the list view.
+  nextUp: () => {
+    const today = todayStr();
+    const active = state.assignments.filter((a) => a.status !== "completed");
+    if (!active.length) return null;
+    const withDates = active.filter((a) => a.dueDate).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const chosen = withDates[0] || active[0];
+    return {
+      title: chosen.title,
+      dueDate: chosen.dueDate || null,
+      overdue: !!(chosen.dueDate && chosen.dueDate < today)
+    };
+  }
 };
 
 /* ---------- INIT ---------- */
