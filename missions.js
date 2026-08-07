@@ -366,6 +366,8 @@ window.MissionsData = {
   wipe: () => { state = defaultState(); save(); render(); },
   populateSettings: () => {},
   goHome: () => { screen = null; editingId = null; draft = null; render(); },
+  // Quick-add entry point (global bottom-strip plus button).
+  openCreate: () => { openDetail(null); },
   getPrimaryMission: () => state.missions.find((m) => m.isPrimary) || null
 };
 

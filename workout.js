@@ -386,6 +386,7 @@ function escapeHTML(s) {
 /* ---------- RUNTIME (non-persisted) STATE ---------- */
 let screen = null;          // null | 'templates' | 'variants' | 'preview' | 'active' | 'builder' | 'program-builder'
 let tab = "home";           // 'home' | 'history' | 'manage'
+let pendingSwipeAnim = null; // 'left' | 'right' | null — set by a swipe gesture, consumed by the next render
 let selectedTemplate = null;
 let selectedVariant = null;
 let activeWorkout = null;
@@ -468,6 +469,13 @@ function renderWorkout() {
   }
 
   el("workout-screen").innerHTML = html;
+  if (pendingSwipeAnim) {
+    const scr = el("workout-screen");
+    scr.classList.remove("tab-swipe-left", "tab-swipe-right");
+    void scr.offsetWidth; // force reflow so the animation replays
+    scr.classList.add(pendingSwipeAnim === "left" ? "tab-swipe-left" : "tab-swipe-right");
+    pendingSwipeAnim = null;
+  }
 
   const showChrome = !isDrill() && !hadError;
   el("wk-top-strip").style.display = showChrome ? "flex" : "none";
@@ -476,6 +484,10 @@ function renderWorkout() {
   document.querySelectorAll(".wk-tab-btn").forEach((b) => {
     b.classList.toggle("active", showChrome && b.getAttribute("data-tab") === tab);
   });
+  // The active-workout / builder screens use their own fixed-bottom sticky
+  // action bar (.wk-sticky-complete) — keep the global persistent strip out
+  // of the way while any of those are on screen so the two don't overlap.
+  if (window.setGlobalNavVisible) window.setGlobalNavVisible(showChrome);
 
   if (hadError) { attachErrorScreenHandlers(); return; }
   try {
@@ -2270,6 +2282,44 @@ document.querySelectorAll(".wk-tab-btn").forEach((b) => {
   });
 });
 
+// Lightweight swipe-left/right gesture: a pointer-based horizontal drag
+// past a distance/angle threshold moves to the next/previous tab. Kept as
+// a local copy rather than a shared shell.js helper because this module's
+// script runs (and wires this up) before shell.js does — see script tag
+// order in index.html — so a `window.*` helper wouldn't exist yet.
+function attachSwipeTabs(containerEl, tabs, getCurrentTab, onSwipe) {
+  if (!containerEl) return;
+  let startX = null, startY = null, tracking = false;
+  containerEl.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX = e.clientX; startY = e.clientY; tracking = true;
+  });
+  containerEl.addEventListener("pointerup", (e) => {
+    if (!tracking || startX === null) { tracking = false; return; }
+    tracking = false;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    startX = null; startY = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const idx = tabs.indexOf(getCurrentTab());
+    if (idx === -1) return;
+    if (dx < 0 && idx < tabs.length - 1) onSwipe(tabs[idx + 1], "left");
+    else if (dx > 0 && idx > 0) onSwipe(tabs[idx - 1], "right");
+  });
+  containerEl.addEventListener("pointercancel", () => { tracking = false; startX = null; startY = null; });
+}
+
+// Swipe left/right over the screen area cycles TODAY/HISTORY/MANAGE, only
+// while at the top level (a drill-down screen like the active workout
+// shouldn't be swipe-navigable away from — that's what the back/discard
+// controls inside it are for).
+attachSwipeTabs(el("workout-screen"), ["home", "history", "manage"], () => tab, (newTab, dir) => {
+  if (isDrill()) return;
+  tab = newTab;
+  screen = null;
+  pendingSwipeAnim = dir;
+  renderWorkout();
+});
+
 // Intercept the active-workout back action: since the active screen has no
 // in-screen back button of its own in this layout (top strip is hidden while
 // drilled in), back navigation for 'variants'/'templates'/'active'/'builder'
@@ -2288,6 +2338,9 @@ window.WorkoutData = {
   weeklyStat: () => `${weeklyCount()}/${Math.max(1, state.weeklyTarget)} THIS WEEK`,
   refresh: () => renderWorkout(),
   goHome: () => { screen = null; tab = "home"; renderWorkout(); },
+  // Quick-add entry point (global bottom-strip plus button): jump straight
+  // to "build a new workout template", same as MANAGE tab's "+ NEW".
+  openCreate: () => { openBuilder(null); },
   // Dashboard SITREP summary: today's program session (if any active
   // program), weekly progress, and whether a workout has already been
   // logged today. Resolved on demand from resolveSessionForDate, same as

@@ -59,9 +59,9 @@ function targetIconSVG(size) {
   size = size || 20;
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`;
 }
-function cogIconSVG(size) {
+function penIconSVG(size) {
   size = size || 16;
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 }
 function flameIconSVG(size) {
   size = size || 14;
@@ -271,15 +271,20 @@ function listScreenHTML() {
 
   const readout = `
     <div class="tg-readout-panel corner-bracket">
-      <div class="tg-readout-block"><div class="readout-label">IN PROGRESS</div><div class="readout-value" style="font-size:26px;">${pad2(active.length)}</div></div>
+      <div class="tg-readout-block"><div class="readout-label">ELIMINATING</div><div class="readout-value" style="font-size:26px;">${pad2(active.length)}</div></div>
       <div class="tg-readout-block"><div class="readout-label">TERMINATED</div><div class="readout-value" style="font-size:26px;">${pad2(terminated.length)}</div></div>
     </div>`;
 
   // Tapping the card opens a read-only view (name, description, heatmap,
-  // streak calendar); the cog is the only route into full edit/settings.
+  // streak calendar); the pen is the only route into full edit/settings.
+  // % eliminated is purely derived (current unbroken streak / target),
+  // never stored — a relapse resets currentStreakDays to 0 and this
+  // recomputes to 0% right along with it, same "derive, don't store"
+  // convention as isTerminated/currentStreakDays.
   const cardHTML = (h) => {
     const streak = currentStreakDays(h, today);
     const term = isTerminated(h, today);
+    const pct = term ? 100 : Math.min(100, Math.round((streak / Math.max(1, h.targetDays)) * 100));
     const heatmap = contributionGridHTML(h, 18, today, true);
     return `<div class="habit-card ${term ? "terminated" : ""}">
       <button class="hc-open" data-open-habit="${h.id}">
@@ -287,13 +292,13 @@ function listScreenHTML() {
           <div class="hc-icon">${targetIconSVG(18)}</div>
           <div class="hc-hero-body">
             <div class="hc-name">${escapeHTML(h.name)}</div>
-            <div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"}</div>
+            <div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"} <span class="hc-pct">· ${pct}% ELIMINATED</span></div>
           </div>
           <div class="hc-streak-pill">${streak}<span>D</span></div>
         </div>
         ${heatmap}
       </button>
-      <button class="hc-settings-btn" data-edit-habit="${h.id}" aria-label="Target settings">${cogIconSVG(15)}</button>
+      <button class="hc-settings-btn" data-edit-habit="${h.id}" aria-label="Target settings">${penIconSVG(15)}</button>
     </div>`;
   };
 
@@ -301,7 +306,7 @@ function listScreenHTML() {
     ${readout}
     <button class="wk-dashed-card" style="width:100%; text-align:center; margin-bottom:18px;" id="btn-tg-new">+ ADD TARGET</button>
     ${state.habits.length === 0 ? `<p class="hint-text" style="text-align:center; padding:30px 0;">No targets yet. Add one above.</p>` : ""}
-    ${active.length ? `<h2 class="group-title"><span class="tick"></span>IN PROGRESS</h2>${active.map(cardHTML).join("")}` : ""}
+    ${active.length ? `<h2 class="group-title"><span class="tick"></span>ELIMINATING</h2>${active.map(cardHTML).join("")}` : ""}
     ${terminated.length ? `<h2 class="group-title muted" style="margin-top:22px;"><span class="tick"></span>TERMINATED</h2>${terminated.map(cardHTML).join("")}` : ""}`;
 }
 
@@ -332,7 +337,7 @@ function viewScreenHTML() {
     <div class="tg-view-pills">
       <span class="tg-status-badge ${term ? "terminated" : "active"}" style="margin:0;">${term ? "TERMINATED" : "TARGET " + h.targetDays + "D"}</span>
       <span class="tg-flame-pill">${flameIconSVG(13)}${streak}</span>
-      <button class="hc-settings-btn" id="btn-tg-view-edit" aria-label="Target settings">${cogIconSVG(15)}</button>
+      <button class="hc-settings-btn" id="btn-tg-view-edit" aria-label="Target settings">${penIconSVG(15)}</button>
     </div>
     <div class="calendar-panel corner-bracket" style="margin-top:16px;">
       <div class="cal-header">
@@ -398,7 +403,7 @@ function detailScreenHTML() {
       <button class="btn-danger-outline" id="btn-tg-delete">DELETE TARGET</button>`;
   }
 
-  const statusBadge = isNew ? "" : `<span class="tg-status-badge ${term ? "terminated" : "active"}">${term ? "TERMINATED" : "IN PROGRESS"}</span>`;
+  const statusBadge = isNew ? "" : `<span class="tg-status-badge ${term ? "terminated" : "active"}">${term ? "TERMINATED" : "ELIMINATING"}</span>`;
 
   const readoutBlock = isNew ? "" : `
     <div class="readout-panel corner-bracket" style="margin-bottom:18px;">
@@ -652,6 +657,8 @@ window.TargetsData = {
   trackedCount: () => state.habits.length,
   bestStreak: () => state.habits.reduce((max, h) => Math.max(max, currentStreakDays(h, todayStr())), 0),
   goHome: () => { screen = null; editingId = null; draft = null; render(); },
+  // Quick-add entry point (global bottom-strip plus button).
+  openCreate: () => { screen = null; editingId = null; draft = null; render(); openPresetSheet(); },
   // Both for gamification.js's point calculation — pure reads over the
   // existing engine functions, nothing new stored.
   totalCleanDaysAcrossHabits: () => state.habits.reduce((sum, h) => sum + totalCleanDaysEver(h, todayStr()), 0),

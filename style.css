@@ -113,7 +113,9 @@ ul{ list-style:none; margin:0; padding:0; }
 .readout-block{ flex:1; }
 .readout-label{ font-size:10px; letter-spacing:2px; color:var(--text-dim); margin-bottom:4px; }
 .readout-value{ font-family:var(--font-mono); font-size:34px; font-weight:700; color:var(--accent); line-height:1; }
+.readout-value .sr-dim{ color:var(--text-dim); opacity:.5; }
 .readout-sub{ font-family:var(--font-mono); font-size:15px; color:var(--text); letter-spacing:1px; }
+#tracking-date-value{ color:var(--accent); }
 .readout-divider{ width:1px; align-self:stretch; background:var(--border); margin:0 16px; }
 
 .today-progress{ height:4px; background:var(--border); margin-top:14px; border-radius:2px; overflow:hidden; }
@@ -148,7 +150,7 @@ ul{ list-style:none; margin:0; padding:0; }
   padding:12px 12px; margin-bottom:8px; border-radius:var(--radius);
   transition:border-color .15s, opacity .15s, transform .15s, background-color .8s ease, color .8s ease;
 }
-.task-item.done{ border-left-color:var(--success); }
+.task-item.done{ border-left-color:var(--accent); }
 .task-item.overdue{ border-left-color:var(--danger); }
 .task-item.dragging{ opacity:.5; }
 .task-item.paused{ opacity:.5; }
@@ -170,9 +172,49 @@ ul{ list-style:none; margin:0; padding:0; }
 .drag-handle{ color:var(--text-dim); padding:4px; touch-action:none; flex-shrink:0; }
 .drag-handle svg{ display:block; }
 
+/* ===== CUSTOM TASK GROUPS ===== */
+.task-group-block{
+  margin-bottom:22px; border:1px solid var(--border); border-radius:var(--radius);
+  padding:10px 10px 4px;
+}
+.tg-block-header{ display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:0 2px; }
+.tg-collapse-btn{ color:var(--text-dim); padding:2px; display:flex; flex-shrink:0; }
+.tg-chevron{ transition:transform .15s; transform:rotate(0deg); }
+.tg-chevron.open{ transform:rotate(90deg); }
+.tg-block-name{
+  flex:1; font-size:12px; letter-spacing:2px; font-weight:700; color:var(--text-dim);
+  text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tg-delete-btn{
+  color:var(--text-dim); opacity:.5; font-size:16px; line-height:1; padding:2px 6px; flex-shrink:0;
+}
+.tg-delete-btn:active{ opacity:1; color:var(--danger); }
+.tg-block-list{ min-height:8px; }
+.tg-block-list:empty{ display:none; }
+
+.empty-note-inline{
+  list-style:none; font-size:11px; color:var(--text-dim); letter-spacing:1px;
+  padding:10px; border:1px dashed var(--border); border-radius:var(--radius);
+  text-align:center; opacity:.6; margin-bottom:8px;
+}
+
+/* Highlighted while a dragged task hovers over this container */
+[data-group-list].drag-target{
+  outline:2px dashed var(--accent); outline-offset:4px; border-radius:var(--radius);
+}
+
+.add-group-btn{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  width:100%; background:transparent; border:1px dashed var(--border); color:var(--text-dim);
+  font-size:11px; letter-spacing:2px; font-weight:700; padding:10px; border-radius:var(--radius);
+  margin-bottom:20px;
+}
+.add-group-btn:active{ border-color:var(--accent); color:var(--accent); }
+
 /* ===== FAB ===== */
 .fab{
-  position:fixed; right:20px; bottom:calc(24px + env(safe-area-inset-bottom));
+  /* Raised to clear the persistent global-bottom-strip beneath it. */
+  position:fixed; right:20px; bottom:calc(84px + env(safe-area-inset-bottom));
   width:56px; height:56px; border-radius:50%;
   background:var(--accent); color:#0B0E0C;
   display:flex; align-items:center; justify-content:center;
@@ -180,6 +222,52 @@ ul{ list-style:none; margin:0; padding:0; }
   max-width:520px;
 }
 .fab:active{ transform:scale(.94); }
+
+/* ===== GLOBAL PERSISTENT BOTTOM STRIP ===== */
+.global-bottom-strip{
+  position:fixed; left:0; right:0; bottom:0; z-index:40;
+  max-width:520px; margin:0 auto; box-sizing:border-box;
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--panel); border-top:1px solid var(--border);
+  padding:8px 30px calc(8px + env(safe-area-inset-bottom));
+}
+.gbs-btn{
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  color:var(--text-dim); font-size:9px; letter-spacing:1px; font-weight:700;
+  padding:4px 8px;
+}
+.gbs-btn.active{ color:var(--accent); }
+.gbs-btn-add{
+  width:46px; height:46px; border-radius:50%; background:var(--accent); color:#0B0E0C;
+  align-items:center; justify-content:center; flex-shrink:0;
+}
+.gbs-btn-add span{ display:none; }
+.gbs-btn-add:active{ transform:scale(.94); }
+
+/* Quick-add vertical button array, opened from the strip's plus icon */
+.quick-add-overlay{
+  position:fixed; inset:0; z-index:45;
+  opacity:0; pointer-events:none; transition:opacity .18s ease;
+}
+.quick-add-overlay.open{ opacity:1; pointer-events:auto; }
+.quick-add-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.55); }
+.quick-add-stack{
+  position:absolute; right:24px; bottom:calc(78px + env(safe-area-inset-bottom));
+  display:flex; flex-direction:column-reverse; gap:10px; align-items:flex-end;
+  max-width:520px;
+}
+.quick-add-item{
+  display:flex; align-items:center; gap:10px;
+  background:var(--panel); border:1px solid var(--border); border-radius:24px;
+  padding:8px 16px 8px 8px;
+  transform:translateY(10px); opacity:0; transition:transform .18s ease, opacity .18s ease;
+}
+.quick-add-overlay.open .quick-add-item{ transform:translateY(0); opacity:1; }
+.quick-add-item span{ font-size:11px; letter-spacing:1px; font-weight:700; color:var(--text); white-space:nowrap; }
+.quick-add-item-icon{
+  width:34px; height:34px; border-radius:50%; background:var(--accent); color:#0B0E0C;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
 
 /* ===== SHEETS ===== */
 .sheet-overlay{
@@ -285,6 +373,12 @@ ul{ list-style:none; margin:0; padding:0; }
    ========================================================= */
 .view[hidden]{ display:none; }
 #view-dashboard, #view-checklist, #view-workout{ max-width:520px; margin:0 auto; min-height:100vh; }
+/* Clearance for the persistent global-bottom-strip, which is
+   position:fixed and so doesn't push document flow on its own. Applied
+   to every view uniformly — any extra whitespace this stacks on top of
+   a view's own bottom padding (e.g. #checklist-main, .dash-main) is
+   harmless. */
+.view{ padding-bottom:84px; box-sizing:border-box; }
 
 .dash-header{ display:flex; align-items:center; justify-content:space-between; padding:16px 16px 4px; }
 .dash-main{ padding:8px 16px 40px; }
@@ -313,10 +407,34 @@ ul{ list-style:none; margin:0; padding:0; }
 .sitrep-date{ font-family:var(--font-mono); font-size:11px; letter-spacing:2px; color:var(--text-dim); margin-top:6px; }
 .sitrep-weather{ display:flex; align-items:center; gap:8px; color:var(--text); flex-shrink:0; padding-left:16px; border-left:1px solid var(--border); }
 .sitrep-weather-icon{ color:var(--accent); display:flex; }
-.sitrep-weather-temp{ font-family:var(--font-mono); font-size:20px; font-weight:700; }
+.sitrep-weather-main{ display:flex; flex-direction:column; align-items:flex-start; }
+.sitrep-weather-temp{ font-family:var(--font-mono); font-size:20px; font-weight:700; line-height:1; }
+.sitrep-weather-cond{ font-family:var(--font-mono); font-size:9px; letter-spacing:1px; color:var(--text-dim); margin-top:3px; }
+
+/* ---------- DASHBOARD CLOCK FONT STYLES ----------
+   A few alternate looks for the big dashboard clock, chosen in
+   Settings > Dashboard. "Digital" fakes an LCD/7-segment feel using a
+   monospace stack plus a soft accent glow, rather than loading an
+   external font — this is an offline-first PWA, and the service worker
+   only pre-caches an explicit asset list, so pulling in a webfont here
+   would add a real "works offline" risk for a cosmetic feature. */
+.clockfont-standard{ font-family:var(--font-head); }
+.clockfont-mono{ font-family:var(--font-mono); }
+.clockfont-serif{ font-family:Georgia,'Times New Roman',serif; font-weight:600; }
+.clockfont-digital{
+  font-family:var(--font-mono); letter-spacing:3px;
+  color:var(--accent); text-shadow:0 0 10px var(--accent-dim);
+}
+.cf-preview{
+  display:block; font-size:15px; font-weight:700; letter-spacing:1px; color:var(--text); margin-bottom:4px;
+}
+.cf-preview.cf-standard{ font-family:var(--font-head); }
+.cf-preview.cf-mono{ font-family:var(--font-mono); }
+.cf-preview.cf-serif{ font-family:Georgia,'Times New Roman',serif; }
+.cf-preview.cf-digital{ font-family:var(--font-mono); letter-spacing:2px; color:var(--accent); text-shadow:0 0 6px var(--accent-dim); }
 
 .dash-lede{ display:flex; align-items:center; gap:8px; }
-.dash-lede::before{ content:""; width:7px; height:7px; background:var(--accent); transform:rotate(45deg); flex-shrink:0; }
+.dash-lede-icon{ color:var(--accent); flex-shrink:0; display:flex; }
 
 .sitrep-priority{
   display:flex; align-items:center; gap:12px;
@@ -325,6 +443,7 @@ ul{ list-style:none; margin:0; padding:0; }
 }
 .sitrep-priority-icon{ color:var(--accent); flex-shrink:0; display:flex; }
 .sitrep-priority-body{ min-width:0; flex:1; }
+.sitrep-priority-overline{ font-size:9px; letter-spacing:2px; color:var(--text-dim); margin-bottom:3px; }
 .sitrep-priority-label{ font-size:10px; letter-spacing:2px; color:var(--accent); font-weight:700; margin-bottom:2px; }
 .sitrep-priority-text{ font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
@@ -356,6 +475,14 @@ ul{ list-style:none; margin:0; padding:0; }
 .top-strip{ display:flex; align-items:center; gap:10px; padding:16px 16px 6px; }
 .top-strip .top-title{ flex:1; font-size:13px; font-weight:700; letter-spacing:2px; }
 .top-strip .icon-btn{ flex-shrink:0; }
+
+/* Swipe-to-change-tab animation — applied to a module's screen container
+   right after a swipe gesture picks a new tab, then removed once the
+   animation finishes (see attachSwipeTabs in shell.js). */
+@keyframes tabSlideInLeft{ from{ transform:translateX(28px); opacity:0; } to{ transform:translateX(0); opacity:1; } }
+@keyframes tabSlideInRight{ from{ transform:translateX(-28px); opacity:0; } to{ transform:translateX(0); opacity:1; } }
+.tab-swipe-left{ animation:tabSlideInLeft .22s ease; }
+.tab-swipe-right{ animation:tabSlideInRight .22s ease; }
 
 /* =========================================================
    WORKOUT MODULE
@@ -474,16 +601,31 @@ ul{ list-style:none; margin:0; padding:0; }
 .wk-variant-tab.active{ background:var(--accent); border-color:var(--accent); color:#0B0E0C; font-weight:700; }
 .wk-variant-tab.add{ color:var(--text-dim); border-style:dashed; }
 
+.settings-tabs{ display:flex; gap:6px; overflow-x:auto; padding-bottom:12px; margin-bottom:4px; border-bottom:1px solid var(--border); -webkit-overflow-scrolling:touch; }
+.settings-tab-btn{
+  padding:7px 12px; border-radius:12px; border:1px solid var(--border); color:var(--text-dim);
+  font-size:10px; letter-spacing:1px; font-weight:600; white-space:nowrap; background:var(--panel-alt); flex-shrink:0;
+}
+.settings-tab-btn.active{ background:var(--accent); border-color:var(--accent); color:#0B0E0C; }
+
 .wk-builder-panel{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
 
-/* bottom tab bar (shared across modules — Workouts, Assignments, etc.) */
+/* Discreet top tab strip (shared across modules — Workouts, Assignments,
+   etc.) — sits in normal document flow directly under each view's
+   top-strip header, replacing the old fixed-to-bottom tab bar. Being in
+   normal flow (not position:fixed) means it automatically stops taking
+   up space when hidden (display:none during a drill-down screen) with
+   no compensating padding needed on the content below it. */
 .wk-tabbar, .module-tabbar{
-  position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:0 auto;
-  display:flex; justify-content:space-around; background:var(--bg); border-top:1px solid var(--border);
-  padding:10px 20px calc(10px + env(safe-area-inset-bottom));
+  display:flex; justify-content:center; gap:6px;
+  padding:0 16px 10px; border-bottom:1px solid var(--border); margin-bottom:2px;
 }
-.wk-tab-btn, .module-tab-btn{ display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--text-dim); font-size:10px; letter-spacing:1px; }
-.wk-tab-btn.active, .module-tab-btn.active{ color:var(--accent); }
+.wk-tab-btn, .module-tab-btn{
+  display:flex; align-items:center; gap:6px; color:var(--text-dim); font-size:10px; letter-spacing:1px; font-weight:600;
+  padding:6px 12px; border-radius:12px;
+}
+.wk-tab-btn.active, .module-tab-btn.active{ color:#0B0E0C; background:var(--accent); }
+.wk-tab-btn svg, .module-tab-btn svg{ flex-shrink:0; }
 
 /* =========================================================
    CENTERED MODAL (distinct from bottom sheet — used for short
@@ -701,6 +843,8 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .subtask-text{ flex:1; font-size:14px; background:none; border:none; color:var(--text); padding:0; }
 .subtask-text:focus{ outline:none; }
 .subtask-remove{ color:var(--text-dim); font-size:16px; flex-shrink:0; padding:2px 4px; }
+.subtask-text-ro{ flex:1; font-size:14px; color:var(--text); }
+.subtask-row.done .subtask-text-ro{ color:var(--text-dim); text-decoration:line-through; }
 .add-subtask-row{ display:flex; gap:8px; margin-bottom:16px; }
 .add-subtask-row input{ flex:1; }
 .add-subtask-row button{ flex-shrink:0; width:44px; background:var(--accent); color:#0B0E0C; border-radius:2px; font-size:18px; font-weight:700; }
@@ -739,6 +883,7 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .hc-hero-body{ min-width:0; flex:1; }
 .hc-name{ font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hc-sub{ font-size:11px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px; }
+.hc-pct{ color:var(--text-dim); opacity:.7; }
 .hc-streak-pill{ font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--accent); flex-shrink:0; display:flex; align-items:baseline; gap:2px; }
 .hc-streak-pill span{ font-size:9px; color:var(--text-dim); font-weight:600; }
 .habit-card.terminated .hc-streak-pill{ color:var(--success); }

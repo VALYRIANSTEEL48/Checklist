@@ -230,6 +230,8 @@ window.WinsData = {
   wipe: () => { state = defaultState(); save(); render(); },
   populateSettings: () => {},
   goHome: () => { render(); },
+  // Quick-add entry point (global bottom-strip plus button).
+  openCreate: () => { openLogSheet(null); },
   // Used by gamification.js's point calculation and Profile's summary.
   countByCategory: () => {
     const counts = { money: 0, fitness: 0, general: 0 };

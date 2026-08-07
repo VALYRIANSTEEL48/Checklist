@@ -42,11 +42,14 @@
       </div>
       <div class="sitrep-weather" id="dash-weather" hidden>
         <span class="sitrep-weather-icon" id="dash-weather-icon"></span>
-        <span class="sitrep-weather-temp" id="dash-weather-temp">--°</span>
+        <span class="sitrep-weather-main">
+          <span class="sitrep-weather-temp" id="dash-weather-temp">--°</span>
+          <span class="sitrep-weather-cond" id="dash-weather-cond" hidden>--</span>
+        </span>
       </div>
     </div>
 
-    <div class="dash-lede" id="dash-lede">SITREP</div>
+    <div class="dash-lede"><span class="dash-lede-icon" id="dash-lede-icon"></span><span id="dash-lede-text">SITREP</span></div>
 
     <!-- Single most urgent item across all modules, when there is one -->
     <div class="sitrep-priority corner-bracket" id="dash-priority" hidden>
@@ -54,6 +57,7 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       </span>
       <div class="sitrep-priority-body">
+        <div class="sitrep-priority-overline" id="dash-priority-overline" hidden>NEXT TASK</div>
         <div class="sitrep-priority-label" id="dash-priority-label">NEXT UP</div>
         <div class="sitrep-priority-text" id="dash-priority-text">--</div>
       </div>
@@ -115,14 +119,6 @@
         <div class="sc-sub" id="dash-wins-sub">LOGGED</div>
       </button>
 
-      <button class="sitrep-cell corner-bracket sitrep-cell-wide" id="tile-profile">
-        <div class="sc-top">
-          <span class="sc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg></span>
-          <span class="sc-title">PROFILE</span>
-        </div>
-        <div class="sc-stat sc-stat-text" id="dash-profile-stat">LV.1 · RECRUIT</div>
-        <div class="sc-sub" id="dash-profile-sub">0 PTS</div>
-      </button>
     </div>
   </div>
 </div>
@@ -164,17 +160,13 @@
   </header>
 
   <main id="checklist-main">
-    <section class="task-group" id="group-scheduled">
-      <h2 class="group-title"><span class="tick"></span>SCHEDULED</h2>
-      <ul class="task-list" id="list-scheduled"></ul>
-      <p class="empty-note" id="empty-scheduled">NO SCHEDULED TASKS</p>
-    </section>
+    <div id="checklist-groups"></div>
+    <p class="empty-note" id="checklist-empty">NO TASKS YET</p>
 
-    <section class="task-group" id="group-anytime">
-      <h2 class="group-title"><span class="tick"></span>ANYTIME</h2>
-      <ul class="task-list" id="list-anytime"></ul>
-      <p class="empty-note" id="empty-anytime">NO ANYTIME TASKS</p>
-    </section>
+    <button id="btn-add-group" class="add-group-btn">
+      <svg viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+      ADD GROUP
+    </button>
 
     <section class="task-group" id="group-paused" hidden>
       <h2 class="group-title muted"><span class="tick"></span>PAUSED</h2>
@@ -187,6 +179,21 @@
   </button>
 
 </div>
+</div>
+
+<!-- New group creation sheet -->
+<div class="sheet-overlay" id="group-new-overlay">
+  <div class="sheet corner-bracket" id="group-new-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3>NEW GROUP</h3>
+      <button class="icon-btn" id="btn-close-group-new"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
+    </div>
+    <div class="sheet-body">
+      <input type="text" id="input-group-name" class="text-input" placeholder="Group name" maxlength="40" />
+      <button class="btn-primary" id="btn-group-new-create">CREATE GROUP</button>
+    </div>
+  </div>
 </div>
 
 <!-- ============================================================
@@ -203,22 +210,22 @@
     </button>
   </div>
 
-  <div id="workout-screen"></div>
-
   <div class="wk-tabbar" id="wk-tabbar">
     <button class="wk-tab-btn" data-tab="home">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
       <span>TODAY</span>
     </button>
     <button class="wk-tab-btn" data-tab="history">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       <span>HISTORY</span>
     </button>
     <button class="wk-tab-btn" data-tab="manage">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg>
       <span>MANAGE</span>
     </button>
   </div>
+
+  <div id="workout-screen"></div>
 </div>
 
 <!-- ============================================================
@@ -235,22 +242,22 @@
     </button>
   </div>
 
-  <div id="assignments-screen"></div>
-
   <div class="module-tabbar" id="as-tabbar">
     <button class="module-tab-btn" data-as-tab="active">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>
       <span>ACTIVE</span>
     </button>
     <button class="module-tab-btn" data-as-tab="planning">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4z"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4z"/></svg>
       <span>PLANNING</span>
     </button>
     <button class="module-tab-btn" data-as-tab="completed">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       <span>COMPLETED</span>
     </button>
   </div>
+
+  <div id="assignments-screen"></div>
 </div>
 
 <!-- ============================================================
@@ -403,83 +410,134 @@
       <h3>SETTINGS</h3>
       <button class="icon-btn" id="btn-close-settings"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg></button>
     </div>
+    <div class="settings-tabs" id="settings-tabs">
+      <button class="settings-tab-btn active" data-settings-tab="appearance">APPEARANCE</button>
+      <button class="settings-tab-btn" data-settings-tab="dashboard">DASHBOARD</button>
+      <button class="settings-tab-btn" data-settings-tab="checklist">CHECKLIST</button>
+      <button class="settings-tab-btn" data-settings-tab="workouts">WORKOUTS</button>
+      <button class="settings-tab-btn" data-settings-tab="ranks">RANKS</button>
+      <button class="settings-tab-btn" data-settings-tab="data">DATA</button>
+    </div>
     <div class="sheet-body">
 
-      <label class="field-label">CHECKLIST — DAILY RESET TIME</label>
-      <input type="time" id="input-reset-time" class="text-input">
-      <p class="hint-text">Tasks reset and the day is scored at this time. Default 00:00.</p>
-
-      <label class="field-label">WORKOUTS — WEEKLY TARGET</label>
-      <div class="stepper" style="margin-top:4px;">
-        <button type="button" id="settings-target-minus">−</button>
-        <div class="stepper-value" id="settings-target-value">7</div>
-        <button type="button" id="settings-target-plus">+</button>
-      </div>
-
-      <label class="field-label">ACCENT COLOR</label>
-      <div class="swatch-row" id="swatch-row">
-        <button class="swatch" data-color="#D98E2B" style="background:#D98E2B"></button>
-        <button class="swatch" data-color="#6B9E5E" style="background:#6B9E5E"></button>
-        <button class="swatch" data-color="#5E8FB0" style="background:#5E8FB0"></button>
-        <button class="swatch" data-color="#B5432E" style="background:#B5432E"></button>
-        <button class="swatch" data-color="#B0A5D1" style="background:#B0A5D1"></button>
-        <input type="color" id="custom-color" class="swatch custom-swatch" value="#D98E2B">
-      </div>
-
-      <label class="field-label">PANEL TONE</label>
-      <div class="tone-grid" id="tone-grid">
-        <button class="tone-swatch" data-val="shadow"><span class="ts-preview" style="background:#12160F"></span>SHADOW</button>
-        <button class="tone-swatch" data-val="blackout"><span class="ts-preview" style="background:#141414"></span>BLACKOUT</button>
-        <button class="tone-swatch" data-val="slate"><span class="ts-preview" style="background:#141821"></span>GUNMETAL</button>
-        <button class="tone-swatch" data-val="olive"><span class="ts-preview" style="background:#181B10"></span>OLIVE DRAB</button>
-        <button class="tone-swatch" data-val="desert"><span class="ts-preview" style="background:#1C1710"></span>DESERT</button>
-        <button class="tone-swatch" data-val="crimson"><span class="ts-preview" style="background:#1A0E0F"></span>CRIMSON</button>
-      </div>
-
-      <label class="field-label">NIGHT MODE</label>
-      <div class="segmented" id="seg-night-mode">
-        <button class="seg-btn" data-val="off">OFF</button>
-        <button class="seg-btn active" data-val="auto">AUTO</button>
-        <button class="seg-btn" data-val="on">ON</button>
-      </div>
-      <div class="night-mode-window" id="night-mode-window">
-        <p class="night-mode-status" id="night-mode-status"><span class="dot"></span><span id="night-mode-status-text">CURRENTLY DAY</span></p>
-        <div class="row-2">
-          <div>
-            <label class="field-label">STARTS</label>
-            <input type="time" id="input-night-start" class="text-input">
-          </div>
-          <div>
-            <label class="field-label">ENDS</label>
-            <input type="time" id="input-night-end" class="text-input">
-          </div>
+      <div class="settings-tab-panel" data-tab-panel="appearance">
+        <label class="field-label" style="margin-top:0;">ACCENT COLOR</label>
+        <div class="swatch-row" id="swatch-row">
+          <button class="swatch" data-color="#D98E2B" style="background:#D98E2B"></button>
+          <button class="swatch" data-color="#6B9E5E" style="background:#6B9E5E"></button>
+          <button class="swatch" data-color="#5E8FB0" style="background:#5E8FB0"></button>
+          <button class="swatch" data-color="#B5432E" style="background:#B5432E"></button>
+          <button class="swatch" data-color="#B0A5D1" style="background:#B0A5D1"></button>
+          <input type="color" id="custom-color" class="swatch custom-swatch" value="#D98E2B">
         </div>
-        <p class="hint-text">A deliberately different palette from anything you can pick above — deeper
-        black, red-shifted, dimmer — so it's noticeable even if you already run Blackout + a red accent
-        by day. Fades in/out instead of cutting.</p>
+
+        <label class="field-label">PANEL TONE</label>
+        <div class="tone-grid" id="tone-grid">
+          <button class="tone-swatch" data-val="shadow"><span class="ts-preview" style="background:#12160F"></span>SHADOW</button>
+          <button class="tone-swatch" data-val="blackout"><span class="ts-preview" style="background:#141414"></span>BLACKOUT</button>
+          <button class="tone-swatch" data-val="slate"><span class="ts-preview" style="background:#141821"></span>GUNMETAL</button>
+          <button class="tone-swatch" data-val="olive"><span class="ts-preview" style="background:#181B10"></span>OLIVE DRAB</button>
+          <button class="tone-swatch" data-val="desert"><span class="ts-preview" style="background:#1C1710"></span>DESERT</button>
+          <button class="tone-swatch" data-val="crimson"><span class="ts-preview" style="background:#1A0E0F"></span>CRIMSON</button>
+        </div>
+
+        <label class="field-label">NIGHT MODE</label>
+        <div class="segmented" id="seg-night-mode">
+          <button class="seg-btn" data-val="off">OFF</button>
+          <button class="seg-btn active" data-val="auto">AUTO</button>
+          <button class="seg-btn" data-val="on">ON</button>
+        </div>
+        <div class="night-mode-window" id="night-mode-window">
+          <p class="night-mode-status" id="night-mode-status"><span class="dot"></span><span id="night-mode-status-text">CURRENTLY DAY</span></p>
+          <div class="row-2">
+            <div>
+              <label class="field-label">STARTS</label>
+              <input type="time" id="input-night-start" class="text-input">
+            </div>
+            <div>
+              <label class="field-label">ENDS</label>
+              <input type="time" id="input-night-end" class="text-input">
+            </div>
+          </div>
+          <p class="hint-text">A deliberately different palette from anything you can pick above — deeper
+          black, red-shifted, dimmer — so it's noticeable even if you already run Blackout + a red accent
+          by day. Fades in/out instead of cutting.</p>
+        </div>
       </div>
 
-      <label class="field-label">RANKS — NAME YOUR OWN TIERS</label>
-      <p class="hint-text" style="margin-top:0;">Tied to Power Level, lowest to highest. Placeholder names — make them yours.</p>
-      <div class="rank-name-grid" id="gm-rank-names">
-        <input type="text" class="text-input" data-rank-idx="0" placeholder="Tier 1" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="1" placeholder="Tier 2" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="2" placeholder="Tier 3" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="3" placeholder="Tier 4" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="4" placeholder="Tier 5" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="5" placeholder="Tier 6" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="6" placeholder="Tier 7" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="7" placeholder="Tier 8" maxlength="20">
-        <input type="text" class="text-input" data-rank-idx="8" placeholder="Tier 9" maxlength="20">
+      <div class="settings-tab-panel" data-tab-panel="dashboard" hidden>
+        <label class="field-label" style="margin-top:0;">TIME FORMAT</label>
+        <div class="segmented" id="seg-time-format">
+          <button class="seg-btn active" data-val="24h">24-HOUR</button>
+          <button class="seg-btn" data-val="12h">12-HOUR</button>
+        </div>
+
+        <label class="field-label">CLOCK FONT</label>
+        <div class="tone-grid" id="clockfont-grid">
+          <button class="tone-swatch" data-val="standard"><span class="cf-preview cf-standard">12:34</span>STANDARD</button>
+          <button class="tone-swatch" data-val="mono"><span class="cf-preview cf-mono">12:34</span>MONO</button>
+          <button class="tone-swatch" data-val="serif"><span class="cf-preview cf-serif">12:34</span>SERIF</button>
+          <button class="tone-swatch" data-val="digital"><span class="cf-preview cf-digital">12:34</span>DIGITAL</button>
+        </div>
+
+        <label class="field-label">ADJUST CLOCK</label>
+        <p class="hint-text" style="margin-top:0;">Nudges the dashboard clock away from your device's real time, in minutes. Leave at 0 to just use the real time.</p>
+        <div class="stepper" style="margin-top:4px;">
+          <button type="button" id="clock-offset-minus">−</button>
+          <div class="stepper-value" id="clock-offset-value">+0 MIN</div>
+          <button type="button" id="clock-offset-plus">+</button>
+        </div>
+        <button class="btn-secondary" id="btn-clock-offset-reset" style="margin-top:10px;">RESET TO REAL TIME</button>
+
+        <label class="field-label">WEATHER WIDGET</label>
+        <div class="segmented" id="seg-weather-style">
+          <button class="seg-btn active" data-val="compact">COMPACT</button>
+          <button class="seg-btn" data-val="detailed">DETAILED</button>
+          <button class="seg-btn" data-val="hidden">HIDDEN</button>
+        </div>
+        <p class="hint-text">Detailed adds the condition (e.g. "PARTLY CLOUDY") beneath the temperature. Hidden turns the widget off entirely.</p>
       </div>
 
-      <label class="field-label">DATA (ALL MODULES)</label>
-      <button class="btn-secondary" id="btn-export">EXPORT BACKUP</button>
-      <button class="btn-secondary" id="btn-import">IMPORT BACKUP</button>
-      <input type="file" id="file-import" accept="application/json" hidden>
-      <button class="btn-danger-outline" id="btn-reset-all">WIPE ALL DATA</button>
+      <div class="settings-tab-panel" data-tab-panel="checklist" hidden>
+        <label class="field-label" style="margin-top:0;">DAILY RESET TIME</label>
+        <input type="time" id="input-reset-time" class="text-input">
+        <p class="hint-text">Tasks reset and the day is scored at this time. Default 00:00.</p>
+      </div>
 
-      <p class="hint-text version-tag">CHECKLIST v3.0 — LOCAL DEVICE STORAGE ONLY</p>
+      <div class="settings-tab-panel" data-tab-panel="workouts" hidden>
+        <label class="field-label" style="margin-top:0;">WEEKLY TARGET</label>
+        <div class="stepper" style="margin-top:4px;">
+          <button type="button" id="settings-target-minus">−</button>
+          <div class="stepper-value" id="settings-target-value">7</div>
+          <button type="button" id="settings-target-plus">+</button>
+        </div>
+      </div>
+
+      <div class="settings-tab-panel" data-tab-panel="ranks" hidden>
+        <label class="field-label" style="margin-top:0;">NAME YOUR OWN TIERS</label>
+        <p class="hint-text" style="margin-top:0;">Tied to Power Level, lowest to highest. Placeholder names — make them yours.</p>
+        <div class="rank-name-grid" id="gm-rank-names">
+          <input type="text" class="text-input" data-rank-idx="0" placeholder="Tier 1" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="1" placeholder="Tier 2" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="2" placeholder="Tier 3" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="3" placeholder="Tier 4" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="4" placeholder="Tier 5" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="5" placeholder="Tier 6" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="6" placeholder="Tier 7" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="7" placeholder="Tier 8" maxlength="20">
+          <input type="text" class="text-input" data-rank-idx="8" placeholder="Tier 9" maxlength="20">
+        </div>
+      </div>
+
+      <div class="settings-tab-panel" data-tab-panel="data" hidden>
+        <label class="field-label" style="margin-top:0;">DATA (ALL MODULES)</label>
+        <button class="btn-secondary" id="btn-export">EXPORT BACKUP</button>
+        <button class="btn-secondary" id="btn-import">IMPORT BACKUP</button>
+        <input type="file" id="file-import" accept="application/json" hidden>
+        <button class="btn-danger-outline" id="btn-reset-all">WIPE ALL DATA</button>
+        <p class="hint-text version-tag">CHECKLIST v3.0 — LOCAL DEVICE STORAGE ONLY</p>
+      </div>
+
     </div>
   </div>
 </div>
@@ -783,6 +841,31 @@
     <div class="rankup-rank" id="rankup-rank">PRIVATE</div>
     <button class="btn-primary" id="btn-rankup-dismiss" style="margin-top:18px;">CONTINUE</button>
   </div>
+</div>
+
+<!-- ============================================================
+     GLOBAL PERSISTENT BOTTOM STRIP
+     Present on every view (dashboard + all modules). Owned by shell.js.
+     ============================================================ -->
+<div class="global-bottom-strip" id="global-bottom-strip">
+  <button class="gbs-btn" id="gbs-profile" aria-label="Profile">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg>
+    <span>PROFILE</span>
+  </button>
+  <button class="gbs-btn gbs-btn-checklist" id="gbs-checklist" aria-label="Checklist">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l2.5 2.5L18 7"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+    <span>CHECKLIST</span>
+  </button>
+  <button class="gbs-btn gbs-btn-add" id="gbs-add" aria-label="Quick add">
+    <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+  </button>
+</div>
+
+<!-- Quick-add vertical button array — populated from shell.js's QUICK_ADD_MODULES
+     list so a newly added module only needs one entry there, no HTML changes. -->
+<div class="quick-add-overlay" id="quick-add-overlay">
+  <div class="quick-add-backdrop" id="quick-add-backdrop"></div>
+  <div class="quick-add-stack" id="quick-add-stack"></div>
 </div>
 
 <div class="toast" id="toast"></div>

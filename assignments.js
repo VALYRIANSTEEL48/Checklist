@@ -42,6 +42,10 @@ function escapeHTML(s) {
   d.textContent = s == null ? "" : String(s);
   return d.innerHTML;
 }
+function penIconSVG(size) {
+  size = size || 16;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+}
 
 /* ---------- RUNTIME (non-persisted) STATE ---------- */
 let tab = "active";       // 'active' | 'planning' | 'completed'
@@ -61,15 +65,22 @@ function render() {
   let html;
   let hadError = false;
   try {
-    html = screen === "detail" ? detailScreenHTML() : listScreenHTML();
+    html = screen === "edit" ? detailScreenHTML() : screen === "view" ? viewScreenHTML() : listScreenHTML();
   } catch (err) {
     console.error("Assignments render error:", err);
     html = errorScreenHTML(err);
     hadError = true;
   }
   el("assignments-screen").innerHTML = html;
+  if (pendingSwipeAnim) {
+    const scr = el("assignments-screen");
+    scr.classList.remove("tab-swipe-left", "tab-swipe-right");
+    void scr.offsetWidth;
+    scr.classList.add(pendingSwipeAnim === "left" ? "tab-swipe-left" : "tab-swipe-right");
+    pendingSwipeAnim = null;
+  }
 
-  const showChrome = screen !== "detail" && !hadError;
+  const showChrome = screen === null && !hadError;
   el("as-top-strip").style.display = "flex";
   el("as-tabbar").style.display = showChrome ? "flex" : "none";
   el("as-top-title").textContent = "ASSIGNMENTS";
@@ -172,6 +183,59 @@ function listScreenHTML() {
     ${cardsHTML || `<p class="hint-text" style="text-align:center; padding:30px 0;">${emptyMsg}</p>`}`;
 }
 
+/* ---------- READ-ONLY VIEW SCREEN ----------
+   Opened by tapping a card: title, description, due date, and the
+   subtask checklist stay read-only EXCEPT the checkboxes themselves and
+   the MARK COMPLETE action, which stay live here for fast day-to-day
+   use. Renaming/adding/removing subtasks, editing title/description/due
+   date, and start/reopen/delete all live behind the pen icon in the
+   full edit screen. */
+function viewScreenHTML() {
+  const a = currentAssignment();
+  if (!a) return "";
+  const { total, done } = subtaskProgress(a);
+  const overdue = isOverdue(a);
+
+  const subtasksHTML = (a.subtasks || []).map((s) => `
+    <li class="subtask-row ${s.done ? "done" : ""}" data-subtask="${s.id}">
+      <span class="checkbox" data-subtask-check="${s.id}">${s.done ? `<svg viewBox="0 0 24 24"><path fill="#0B0E0C" d="M9 16.2L4.8 12l-1.4 1.4L9 19 20.6 7.4 19.2 6z"/></svg>` : ""}</span>
+      <span class="subtask-text-ro">${escapeHTML(s.text)}</span>
+    </li>`).join("");
+
+  const statusBadge = `<span class="as-status-badge ${a.status}">${a.status.replace("_", " ").toUpperCase()}</span>`;
+
+  let actionHTML = "";
+  if (a.status === "in_progress") {
+    actionHTML = `<button class="btn-primary" id="btn-as-mark-complete">MARK COMPLETE</button>`;
+  } else if (a.status === "completed") {
+    const note = a.completionNote || {};
+    actionHTML = `
+      <div class="completion-note-block">
+        <div class="cn-label">COMPLETED ${a.completedAt ? fmtDateShort(a.completedAt.slice(0,10)).toUpperCase() : ""}</div>
+        <div class="cn-text">${escapeHTML(note.summary || "(no summary written)")}</div>
+        ${note.skippedReason ? `<div class="cn-label" style="margin-top:10px;">SKIPPED SUBTASKS — WHY</div><div class="cn-text">${escapeHTML(note.skippedReason)}</div>` : ""}
+      </div>`;
+  }
+
+  return `
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+      <button class="icon-btn" id="btn-as-view-back">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h1 class="screen-h1" style="margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTML(a.title || "Untitled")}</h1>
+      <button class="icon-btn" id="btn-as-view-edit" aria-label="Edit assignment">${penIconSVG(20)}</button>
+    </div>
+    ${statusBadge}
+    ${a.description ? `<p class="hint-text" style="margin:10px 0 4px; font-size:13px; line-height:1.5; color:var(--text);">${escapeHTML(a.description)}</p>` : ""}
+    <div class="hint-text" style="margin-bottom:14px;">${a.dueDate ? (overdue ? "OVERDUE · " : "DUE ") + fmtDateShort(a.dueDate) : "NO DUE DATE"}</div>
+
+    ${total ? `<div class="builder-section-title">SUBTASKS (${done}/${total})</div>
+    <ul class="task-list" style="list-style:none; padding:0; margin:0 0 16px;">${subtasksHTML}</ul>` : ""}
+
+    ${actionHTML}
+  `;
+}
+
 /* ---------- DETAIL / CREATE-EDIT SCREEN ---------- */
 function calendarGridHTML(selectedDate) {
   const y = asCalView.getFullYear(), m = asCalView.getMonth();
@@ -269,10 +333,29 @@ function screenHeaderHTML(title) {
 
 /* ---------- HANDLERS ---------- */
 function attachHandlers() {
-  if (screen === "detail") { attachDetailHandlers(); return; }
-  document.querySelectorAll("[data-open-assignment]").forEach((b) => b.onclick = () => openDetail(b.getAttribute("data-open-assignment")));
+  if (screen === "edit") { attachDetailHandlers(); return; }
+  if (screen === "view") { attachViewHandlers(); return; }
+  document.querySelectorAll("[data-open-assignment]").forEach((b) => b.onclick = () => openView(b.getAttribute("data-open-assignment")));
   const newBtn = el("btn-as-new");
-  if (newBtn) newBtn.onclick = () => openDetail(null);
+  if (newBtn) newBtn.onclick = () => openEdit(null);
+}
+
+function attachViewHandlers() {
+  const a = currentAssignment();
+  if (!a) return;
+
+  const backBtn = el("btn-as-view-back");
+  if (backBtn) backBtn.onclick = () => { screen = null; editingId = null; draft = null; render(); };
+  const editBtn = el("btn-as-view-edit");
+  if (editBtn) editBtn.onclick = () => openEdit(a.id);
+
+  document.querySelectorAll("[data-subtask-check]").forEach((cb) => cb.onclick = () => {
+    const s = a.subtasks.find((x) => x.id === cb.getAttribute("data-subtask-check"));
+    s.done = !s.done; save(); render();
+  });
+
+  const markCompleteBtn = el("btn-as-mark-complete");
+  if (markCompleteBtn) markCompleteBtn.onclick = () => openCompleteSheet();
 }
 
 function attachDetailHandlers() {
@@ -282,7 +365,13 @@ function attachDetailHandlers() {
   const commit = () => { if (!isNew) save(); };
 
   const backBtn = el("btn-as-detail-back");
-  if (backBtn) backBtn.onclick = () => { screen = null; editingId = null; draft = null; render(); };
+  // Editing an existing assignment came from the view screen (via the pen
+  // icon) — return there, not the list. Creating a new one has no view to
+  // go back to, so that path still exits to the list.
+  if (backBtn) backBtn.onclick = () => {
+    if (editingId) { screen = "view"; render(); }
+    else { screen = null; editingId = null; draft = null; render(); }
+  };
 
   el("as-title").onblur = (e) => { a.title = e.target.value; commit(); };
   el("as-description").onblur = (e) => { a.description = e.target.value; commit(); };
@@ -373,7 +462,12 @@ function flashInvalid(input) {
   setTimeout(() => { input.style.borderColor = ""; }, 900);
 }
 
-function openDetail(assignmentId) {
+function openView(assignmentId) {
+  editingId = assignmentId; draft = null;
+  screen = "view";
+  render();
+}
+function openEdit(assignmentId) {
   if (assignmentId) {
     editingId = assignmentId; draft = null;
     const a = state.assignments.find((x) => x.id === assignmentId);
@@ -383,7 +477,7 @@ function openDetail(assignmentId) {
     draft = { title: "", description: "", dueDate: null, subtasks: [] };
     asCalView = new Date();
   }
-  screen = "detail";
+  screen = "edit";
   render();
 }
 
@@ -424,6 +518,42 @@ document.querySelectorAll(".module-tab-btn[data-as-tab]").forEach((b) => {
   b.addEventListener("click", () => { tab = b.getAttribute("data-as-tab"); screen = null; render(); });
 });
 
+// Lightweight swipe-left/right gesture: a pointer-based horizontal drag
+// past a distance/angle threshold moves to the next/previous tab. Kept as
+// a local copy rather than a shared shell.js helper because this module's
+// script runs (and wires this up) before shell.js does — see script tag
+// order in index.html — so a `window.*` helper wouldn't exist yet.
+let pendingSwipeAnim = null;
+function attachSwipeTabs(containerEl, tabs, getCurrentTab, onSwipe) {
+  if (!containerEl) return;
+  let startX = null, startY = null, tracking = false;
+  containerEl.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX = e.clientX; startY = e.clientY; tracking = true;
+  });
+  containerEl.addEventListener("pointerup", (e) => {
+    if (!tracking || startX === null) { tracking = false; return; }
+    tracking = false;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    startX = null; startY = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const idx = tabs.indexOf(getCurrentTab());
+    if (idx === -1) return;
+    if (dx < 0 && idx < tabs.length - 1) onSwipe(tabs[idx + 1], "left");
+    else if (dx > 0 && idx > 0) onSwipe(tabs[idx - 1], "right");
+  });
+  containerEl.addEventListener("pointercancel", () => { tracking = false; startX = null; startY = null; });
+}
+
+// Swipe left/right over the list cycles ACTIVE/PLANNING/COMPLETED, only
+// while at the top-level list (screen === null) — not mid view/edit.
+attachSwipeTabs(el("assignments-screen"), ["active", "planning", "completed"], () => tab, (newTab, dir) => {
+  if (screen !== null) return;
+  tab = newTab;
+  pendingSwipeAnim = dir;
+  render();
+});
+
 /* ---------- PUBLIC INTERFACE ---------- */
 window.AssignmentsData = {
   getState: () => state,
@@ -432,6 +562,8 @@ window.AssignmentsData = {
   populateSettings: () => {},
   activeCount: () => state.assignments.filter((a) => a.status === "in_progress").length,
   goHome: () => { screen = null; editingId = null; draft = null; tab = "active"; render(); },
+  // Quick-add entry point (global bottom-strip plus button).
+  openCreate: () => { openEdit(null); },
   // Dashboard SITREP summary: the single most pressing non-completed
   // assignment (earliest due date; undated ones sort last), plus whether
   // it's already overdue. Resolved on demand, same sort as the list view.
