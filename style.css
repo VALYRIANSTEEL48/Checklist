@@ -214,7 +214,7 @@ ul{ list-style:none; margin:0; padding:0; }
 /* ===== FAB ===== */
 .fab{
   /* Raised to clear the persistent global-bottom-strip beneath it. */
-  position:fixed; right:20px; bottom:calc(84px + env(safe-area-inset-bottom));
+  position:fixed; right:20px; bottom:calc(60px + env(safe-area-inset-bottom));
   width:56px; height:56px; border-radius:50%;
   background:var(--accent); color:#0B0E0C;
   display:flex; align-items:center; justify-content:center;
@@ -229,20 +229,20 @@ ul{ list-style:none; margin:0; padding:0; }
   max-width:520px; margin:0 auto; box-sizing:border-box;
   display:flex; align-items:center; justify-content:space-between;
   background:var(--panel); border-top:1px solid var(--border);
-  padding:8px 30px calc(8px + env(safe-area-inset-bottom));
+  padding:6px 22px calc(6px + env(safe-area-inset-bottom));
 }
 .gbs-btn{
-  display:flex; flex-direction:column; align-items:center; gap:3px;
-  color:var(--text-dim); font-size:9px; letter-spacing:1px; font-weight:700;
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  color:var(--text-dim); font-size:8px; letter-spacing:1px; font-weight:700;
   padding:4px 8px;
 }
 .gbs-btn.active{ color:var(--accent); }
-.gbs-btn-add{
-  width:46px; height:46px; border-radius:50%; background:var(--accent); color:#0B0E0C;
-  align-items:center; justify-content:center; flex-shrink:0;
-}
-.gbs-btn-add span{ display:none; }
-.gbs-btn-add:active{ transform:scale(.94); }
+/* Deliberately NOT a bright filled circle — that look is already used by
+   the checklist's own "add task" FAB, and this button needs to read as a
+   distinct, quieter action right next to it (checklist has its FAB
+   directly above this same corner). Same icon+label shape as its
+   siblings, just an outline plus glyph instead of a themed icon. */
+.gbs-btn-add:active{ color:var(--accent); }
 
 /* Quick-add vertical button array, opened from the strip's plus icon */
 .quick-add-overlay{
@@ -252,7 +252,7 @@ ul{ list-style:none; margin:0; padding:0; }
 .quick-add-overlay.open{ opacity:1; pointer-events:auto; }
 .quick-add-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.55); }
 .quick-add-stack{
-  position:absolute; right:24px; bottom:calc(78px + env(safe-area-inset-bottom));
+  position:absolute; right:24px; bottom:calc(64px + env(safe-area-inset-bottom));
   display:flex; flex-direction:column-reverse; gap:10px; align-items:flex-end;
   max-width:520px;
 }
@@ -264,8 +264,14 @@ ul{ list-style:none; margin:0; padding:0; }
 }
 .quick-add-overlay.open .quick-add-item{ transform:translateY(0); opacity:1; }
 .quick-add-item span{ font-size:11px; letter-spacing:1px; font-weight:700; color:var(--text); white-space:nowrap; }
+/* Bordered/outline instead of a solid fill — a solid accent-colored disc
+   can wash the icon glyph out entirely when the theme accent is a bright
+   color (the icon itself is also drawn in currentColor/accent, so a solid
+   accent background left it nearly invisible). An outline keeps the icon
+   legible against any accent choice. */
 .quick-add-item-icon{
-  width:34px; height:34px; border-radius:50%; background:var(--accent); color:#0B0E0C;
+  width:34px; height:34px; border-radius:50%; background:transparent;
+  border:2px solid var(--accent); color:var(--accent);
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
 
@@ -378,11 +384,11 @@ ul{ list-style:none; margin:0; padding:0; }
    to every view uniformly — any extra whitespace this stacks on top of
    a view's own bottom padding (e.g. #checklist-main, .dash-main) is
    harmless. */
-.view{ padding-bottom:84px; box-sizing:border-box; }
+.view{ padding-bottom:60px; box-sizing:border-box; }
 
-.dash-header{ display:flex; align-items:center; justify-content:space-between; padding:16px 16px 4px; }
-.dash-main{ padding:8px 16px 40px; }
-.dash-lede{ font-size:11px; letter-spacing:2px; color:var(--text-dim); margin:4px 0 18px; }
+.dash-header{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px 2px; }
+.dash-main{ padding:6px 16px 8px; }
+.dash-lede{ font-size:11px; letter-spacing:2px; color:var(--text-dim); margin:4px 0 12px; }
 
 .tile{
   display:flex; align-items:center; gap:14px; width:100%; text-align:left;
@@ -400,11 +406,11 @@ ul{ list-style:none; margin:0; padding:0; }
 /* ---------- DASHBOARD SITREP ---------- */
 .sitrep-strip{
   display:flex; align-items:center; justify-content:space-between;
-  background:var(--panel); border:1px solid var(--border); padding:16px 18px;
-  border-radius:var(--radius); margin-bottom:14px;
+  background:var(--panel); border:1px solid var(--border); padding:12px 16px;
+  border-radius:var(--radius); margin-bottom:10px;
 }
-.sitrep-time{ font-family:var(--font-mono); font-size:38px; font-weight:700; color:var(--text); line-height:1; letter-spacing:1px; }
-.sitrep-date{ font-family:var(--font-mono); font-size:11px; letter-spacing:2px; color:var(--text-dim); margin-top:6px; }
+.sitrep-time{ font-family:var(--font-mono); font-size:32px; font-weight:700; color:var(--text); line-height:1; letter-spacing:1px; }
+.sitrep-date{ font-family:var(--font-mono); font-size:10px; letter-spacing:2px; color:var(--text-dim); margin-top:5px; }
 .sitrep-weather{ display:flex; align-items:center; gap:8px; color:var(--text); flex-shrink:0; padding-left:16px; border-left:1px solid var(--border); }
 .sitrep-weather-icon{ color:var(--accent); display:flex; }
 .sitrep-weather-main{ display:flex; flex-direction:column; align-items:flex-start; }
@@ -412,34 +418,69 @@ ul{ list-style:none; margin:0; padding:0; }
 .sitrep-weather-cond{ font-family:var(--font-mono); font-size:9px; letter-spacing:1px; color:var(--text-dim); margin-top:3px; }
 
 /* ---------- DASHBOARD CLOCK FONT STYLES ----------
-   A few alternate looks for the big dashboard clock, chosen in
-   Settings > Dashboard. "Digital" fakes an LCD/7-segment feel using a
-   monospace stack plus a soft accent glow, rather than loading an
-   external font — this is an offline-first PWA, and the service worker
-   only pre-caches an explicit asset list, so pulling in a webfont here
-   would add a real "works offline" risk for a cosmetic feature. */
+   A few alternate looks for the big dashboard clock, chosen in Settings >
+   Dashboard. Uses its own .clockfont-grid/.clockfont-swatch classes
+   (deliberately NOT .tone-grid/.tone-swatch, which is the accent/palette
+   picker) — those two pickers used to share a class name, and checklist.js
+   has a document-wide, unscoped click handler on .tone-swatch[data-val]
+   for the palette; clicking a clock-font button was also firing that
+   handler and silently corrupting the saved palette tone. Two visually
+   near-identical but namespace-isolated components now. */
+.clockfont-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.clockfont-swatch{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius);
+  padding:8px 4px 10px; font-size:9px; letter-spacing:1px; color:var(--text-dim); font-weight:700;
+}
+.clockfont-swatch.active{ border-color:var(--accent); color:var(--text); }
+
 .clockfont-standard{ font-family:var(--font-head); }
 .clockfont-mono{ font-family:var(--font-mono); }
 .clockfont-serif{ font-family:Georgia,'Times New Roman',serif; font-weight:600; }
-.clockfont-digital{
-  font-family:var(--font-mono); letter-spacing:3px;
-  color:var(--accent); text-shadow:0 0 10px var(--accent-dim);
-}
+/* "Digital" doesn't swap font-family at all — see the 7-segment display
+   block further down. This class just sets up the flex row that holds
+   the generated digit/colon/suffix pieces. */
+.clockfont-digital{ display:inline-flex; align-items:center; }
+
 .cf-preview{
   display:block; font-size:15px; font-weight:700; letter-spacing:1px; color:var(--text); margin-bottom:4px;
 }
 .cf-preview.cf-standard{ font-family:var(--font-head); }
 .cf-preview.cf-mono{ font-family:var(--font-mono); }
 .cf-preview.cf-serif{ font-family:Georgia,'Times New Roman',serif; }
-.cf-preview.cf-digital{ font-family:var(--font-mono); letter-spacing:2px; color:var(--accent); text-shadow:0 0 6px var(--accent-dim); }
+.cf-preview.cf-digital{ display:flex; justify-content:center; transform:scale(.55); transform-origin:center; margin-bottom:-6px; }
+
+/* ---------- 7-SEGMENT DIGITAL DISPLAY ----------
+   A real segmented-LCD look built from plain divs — no font file needed
+   (this is an offline-first PWA; the service worker only pre-caches an
+   explicit asset list, and there's no reliable way to fetch a real
+   licensed 7-segment font at build time here). Each digit is 7 fixed
+   segment bars; unlit segments stay faintly visible at low opacity
+   (the "ghost segment" look of a real digital alarm clock) instead of
+   disappearing, and lit segments get a soft accent glow. */
+.sseg-digit{ position:relative; width:17px; height:30px; margin:0 2px; display:inline-block; vertical-align:middle; }
+.sseg-seg{ position:absolute; border-radius:1px; background:var(--border); opacity:.4; transition:opacity .15s, background-color .15s; }
+.sseg-seg.sseg-on{ background:var(--accent); opacity:1; box-shadow:0 0 7px var(--accent-dim); }
+.sseg-a{ top:0;    left:2px; width:12.5px; height:3px; }
+.sseg-g{ top:13.5px; left:2px; width:12.5px; height:3px; }
+.sseg-d{ top:27px;  left:2px; width:12.5px; height:3px; }
+.sseg-f{ top:2px;   left:0;   width:3px; height:12.5px; }
+.sseg-b{ top:2px;   right:0;  width:3px; height:12.5px; }
+.sseg-e{ top:15.5px; left:0;  width:3px; height:12.5px; }
+.sseg-c{ top:15.5px; right:0; width:3px; height:12.5px; }
+.sseg-colon{ position:relative; width:6px; height:30px; display:inline-block; vertical-align:middle; }
+.sseg-dot{ position:absolute; left:1px; width:3.5px; height:3.5px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent-dim); }
+.sseg-dot-a{ top:9px; }
+.sseg-dot-b{ top:18px; }
+.sseg-suffix{ font-family:var(--font-mono); font-size:12px; letter-spacing:1px; color:var(--accent); margin-left:6px; vertical-align:middle; }
 
 .dash-lede{ display:flex; align-items:center; gap:8px; }
 .dash-lede-icon{ color:var(--accent); flex-shrink:0; display:flex; }
 
 .sitrep-priority{
-  display:flex; align-items:center; gap:12px;
-  background:var(--panel); border:1px solid var(--accent); padding:12px 14px;
-  border-radius:var(--radius); margin-bottom:16px;
+  display:flex; align-items:center; gap:10px;
+  background:var(--panel); border:1px solid var(--accent); padding:9px 12px;
+  border-radius:var(--radius); margin-bottom:10px;
 }
 .sitrep-priority-icon{ color:var(--accent); flex-shrink:0; display:flex; }
 .sitrep-priority-body{ min-width:0; flex:1; }
@@ -447,20 +488,20 @@ ul{ list-style:none; margin:0; padding:0; }
 .sitrep-priority-label{ font-size:10px; letter-spacing:2px; color:var(--accent); font-weight:700; margin-bottom:2px; }
 .sitrep-priority-text{ font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-.sitrep-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.sitrep-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .sitrep-cell{
   display:flex; flex-direction:column; align-items:flex-start; text-align:left;
-  background:var(--panel); border:1px solid var(--border); padding:14px 14px 16px;
-  border-radius:var(--radius); min-height:118px; box-sizing:border-box;
+  background:var(--panel); border:1px solid var(--border); padding:10px 12px 11px;
+  border-radius:var(--radius); min-height:88px; box-sizing:border-box;
 }
 .sitrep-cell:active{ transform:scale(.98); }
-.sc-top{ display:flex; align-items:center; gap:7px; margin-bottom:14px; color:var(--text-dim); }
+.sc-top{ display:flex; align-items:center; gap:6px; margin-bottom:7px; color:var(--text-dim); }
 .sc-icon{ color:var(--accent); display:flex; flex-shrink:0; }
-.sc-title{ font-size:10px; font-weight:700; letter-spacing:2px; }
-.sc-stat{ font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--accent); line-height:1.1; margin-top:auto; }
+.sc-title{ font-size:9px; font-weight:700; letter-spacing:1.5px; }
+.sc-stat{ font-family:var(--font-mono); font-size:21px; font-weight:700; color:var(--accent); line-height:1.1; margin-top:auto; }
 .sc-stat-sep{ color:var(--text-dim); font-weight:400; margin:0 1px; }
-.sc-stat-text{ font-size:15px; letter-spacing:.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
-.sc-sub{ font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--text-dim); margin-top:5px; }
+.sc-stat-text{ font-size:13px; letter-spacing:.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+.sc-sub{ font-family:var(--font-mono); font-size:9px; letter-spacing:1px; color:var(--text-dim); margin-top:4px; }
 .sitrep-cell-wide{ grid-column:1 / -1; }
 
 .dash-header-right{ display:flex; align-items:center; gap:8px; }

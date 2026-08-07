@@ -473,11 +473,11 @@
         </div>
 
         <label class="field-label">CLOCK FONT</label>
-        <div class="tone-grid" id="clockfont-grid">
-          <button class="tone-swatch" data-val="standard"><span class="cf-preview cf-standard">12:34</span>STANDARD</button>
-          <button class="tone-swatch" data-val="mono"><span class="cf-preview cf-mono">12:34</span>MONO</button>
-          <button class="tone-swatch" data-val="serif"><span class="cf-preview cf-serif">12:34</span>SERIF</button>
-          <button class="tone-swatch" data-val="digital"><span class="cf-preview cf-digital">12:34</span>DIGITAL</button>
+        <div class="clockfont-grid" id="clockfont-grid">
+          <button class="clockfont-swatch" data-val="standard"><span class="cf-preview cf-standard">12:34</span>STANDARD</button>
+          <button class="clockfont-swatch" data-val="mono"><span class="cf-preview cf-mono">12:34</span>MONO</button>
+          <button class="clockfont-swatch" data-val="serif"><span class="cf-preview cf-serif">12:34</span>SERIF</button>
+          <button class="clockfont-swatch" data-val="digital"><span class="cf-preview cf-digital" id="cf-digital-preview">12:34</span>DIGITAL</button>
         </div>
 
         <label class="field-label">ADJUST CLOCK</label>
@@ -848,16 +848,21 @@
      Present on every view (dashboard + all modules). Owned by shell.js.
      ============================================================ -->
 <div class="global-bottom-strip" id="global-bottom-strip">
-  <button class="gbs-btn" id="gbs-profile" aria-label="Profile">
-    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg>
-    <span>PROFILE</span>
-  </button>
   <button class="gbs-btn gbs-btn-checklist" id="gbs-checklist" aria-label="Checklist">
-    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l2.5 2.5L18 7"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l2.5 2.5L18 7"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
     <span>CHECKLIST</span>
   </button>
+  <button class="gbs-btn" id="gbs-home" aria-label="Home">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+    <span>HOME</span>
+  </button>
+  <button class="gbs-btn" id="gbs-profile" aria-label="Profile">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/></svg>
+    <span>PROFILE</span>
+  </button>
   <button class="gbs-btn gbs-btn-add" id="gbs-add" aria-label="Quick add">
-    <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+    <span>ADD</span>
   </button>
 </div>
 

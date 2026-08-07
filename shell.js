@@ -126,6 +126,42 @@ function fmtDashClock12(now) {
   h = h % 12; if (h === 0) h = 12;
   return h + ":" + pad2(now.getMinutes()) + " " + ap;
 }
+// ---------- 7-segment digital display ----------
+// A real segmented-LCD render built from CSS divs (see .sseg-* rules in
+// style.css) rather than a font-family swap — there's no reliable way to
+// fetch/embed a real licensed 7-segment font offline here, and a plain
+// monospace font with a glow doesn't actually look like a digital clock.
+// This builds it directly instead.
+const SEVEN_SEG_MAP = {
+  "0": "abcdef", "1": "bc", "2": "abged", "3": "abgcd", "4": "fgbc",
+  "5": "afgcd", "6": "afgecd", "7": "abc", "8": "abcdefg", "9": "abcdfg"
+};
+function sevenSegDigitHTML(d) {
+  const on = SEVEN_SEG_MAP[d] || "";
+  return `<span class="sseg-digit">${["a","b","c","d","e","f","g"].map((s) =>
+    `<span class="sseg-seg sseg-${s}${on.includes(s) ? " sseg-on" : ""}"></span>`).join("")}</span>`;
+}
+function renderSevenSegClock(str) {
+  let out = "";
+  let i = 0;
+  while (i < str.length) {
+    const c = str[i];
+    if (SEVEN_SEG_MAP[c]) {
+      out += sevenSegDigitHTML(c);
+      i++;
+    } else if (c === ":") {
+      out += `<span class="sseg-colon"><span class="sseg-dot sseg-dot-a"></span><span class="sseg-dot sseg-dot-b"></span></span>`;
+      i++;
+    } else {
+      // Whatever's left (a space + "AM"/"PM" in 12-hour mode) isn't
+      // segment-able — render it as a plain suffix and stop.
+      out += `<span class="sseg-suffix">${str.slice(i).trim()}</span>`;
+      break;
+    }
+  }
+  return out;
+}
+
 function updateClock() {
   // The offset is a deliberate manual nudge (Settings > Dashboard), not a
   // timezone correction — it shifts what the dashboard *displays* (clock
@@ -133,8 +169,14 @@ function updateClock() {
   // actually reads the real device clock elsewhere in the app (streaks,
   // due dates, etc. all still use real Date() untouched).
   const now = dashSettings.timeOffsetMin ? new Date(Date.now() + dashSettings.timeOffsetMin * 60000) : new Date();
-  el("dash-time").textContent = dashSettings.timeFormat === "12h" ? fmtDashClock12(now) : (pad2(now.getHours()) + ":" + pad2(now.getMinutes()));
-  el("dash-time").className = "sitrep-time clockfont-" + dashSettings.clockFont;
+  const timeStr = dashSettings.timeFormat === "12h" ? fmtDashClock12(now) : (pad2(now.getHours()) + ":" + pad2(now.getMinutes()));
+  const timeEl = el("dash-time");
+  if (dashSettings.clockFont === "digital") {
+    timeEl.innerHTML = renderSevenSegClock(timeStr);
+  } else {
+    timeEl.textContent = timeStr;
+  }
+  timeEl.className = "sitrep-time clockfont-" + dashSettings.clockFont;
   el("dash-date").textContent = WEEKDAY_SHORT[now.getDay()] + " · " + MONTH_SHORT[now.getMonth()] + " " + now.getDate();
   const h = now.getHours();
   const greeting = h < 5 ? "NIGHT SITREP" : h < 12 ? "MORNING SITREP" : h < 17 ? "AFTERNOON SITREP" : h < 21 ? "EVENING SITREP" : "NIGHT SITREP";
@@ -404,11 +446,13 @@ el("quick-add-backdrop").addEventListener("click", closeQuickAdd);
 
 el("gbs-profile").addEventListener("click", openProfile);
 el("gbs-checklist").addEventListener("click", openChecklist);
+el("gbs-home").addEventListener("click", () => window.goToDashboard());
 
 // Highlight which strip shortcut (if any) matches the current view.
 function refreshGlobalNavActive(viewId) {
   el("gbs-profile").classList.toggle("active", viewId === "view-profile");
   el("gbs-checklist").classList.toggle("active", viewId === "view-checklist");
+  el("gbs-home").classList.toggle("active", viewId === "view-dashboard");
 }
 
 // Some modules (Workouts' active-session screen, which has its own
@@ -433,13 +477,18 @@ function populateDashSettingsFields() {
   document.querySelectorAll('#seg-time-format .seg-btn').forEach((b) => {
     b.classList.toggle("active", b.getAttribute("data-val") === dashSettings.timeFormat);
   });
-  document.querySelectorAll('#clockfont-grid .tone-swatch').forEach((b) => {
+  document.querySelectorAll('#clockfont-grid .clockfont-swatch').forEach((b) => {
     b.classList.toggle("active", b.getAttribute("data-val") === dashSettings.clockFont);
   });
   document.querySelectorAll('#seg-weather-style .seg-btn').forEach((b) => {
     b.classList.toggle("active", b.getAttribute("data-val") === dashSettings.weatherStyle);
   });
   el("clock-offset-value").textContent = (dashSettings.timeOffsetMin >= 0 ? "+" : "") + dashSettings.timeOffsetMin + " MIN";
+  const digitalPreview = el("cf-digital-preview");
+  if (digitalPreview && !digitalPreview.dataset.rendered) {
+    digitalPreview.innerHTML = renderSevenSegClock("12:34");
+    digitalPreview.dataset.rendered = "1";
+  }
 }
 document.querySelectorAll('#seg-time-format .seg-btn').forEach((b) => {
   b.addEventListener("click", () => {
@@ -447,7 +496,7 @@ document.querySelectorAll('#seg-time-format .seg-btn').forEach((b) => {
     saveDashSettings(); populateDashSettingsFields(); updateClock();
   });
 });
-document.querySelectorAll('#clockfont-grid .tone-swatch').forEach((b) => {
+document.querySelectorAll('#clockfont-grid .clockfont-swatch').forEach((b) => {
   b.addEventListener("click", () => {
     dashSettings.clockFont = b.getAttribute("data-val");
     saveDashSettings(); populateDashSettingsFields(); updateClock();
