@@ -98,13 +98,18 @@ function upsertLibraryEntry(name, fields, values) {
   const key = name.toLowerCase();
   const snapshot = {};
   (fields || []).forEach((k) => { if (values[k] != null && values[k] !== "") snapshot[k] = values[k]; });
+  // AMRAP isn't itself a field key (it's a flag on "reps"), so it rides
+  // alongside the fields-filtered snapshot rather than inside it — read
+  // directly off `values.ampap` (callers pass `snapshot.ampap` explicitly).
+  const ampap = !!values.ampap;
   const existing = state.exerciseLibrary.find((e) => e.name.toLowerCase() === key);
   if (existing) {
     existing.name = name;
     existing.fields = sortFields(fields || existing.fields);
     existing.values = Object.assign({}, existing.values, snapshot);
+    existing.ampap = ampap;
   } else {
-    state.exerciseLibrary.push({ name, fields: sortFields(fields || []), values: snapshot });
+    state.exerciseLibrary.push({ name, fields: sortFields(fields || []), values: snapshot, ampap });
   }
   save();
 }
@@ -358,6 +363,7 @@ function iconSVG(name, size) {
     case "edit": return `<svg ${s}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
     case "trash": return `<svg ${s}><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`;
     case "note": return `<svg ${s}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>`;
+    case "timer": return `<svg ${s}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/></svg>`;
     default: return `<svg ${s}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`;
   }
 }
@@ -378,7 +384,7 @@ function escapeHTML(s) {
 }
 
 /* ---------- RUNTIME (non-persisted) STATE ---------- */
-let screen = null;          // null | 'templates' | 'variants' | 'active' | 'builder' | 'program-builder'
+let screen = null;          // null | 'templates' | 'variants' | 'preview' | 'active' | 'builder' | 'program-builder'
 let tab = "home";           // 'home' | 'history' | 'manage'
 let selectedTemplate = null;
 let selectedVariant = null;
@@ -398,7 +404,7 @@ let daySheetCtx = null;         // { phaseId, dow } while the day-assign sheet i
 let slotEditorCtx = null;       // { phaseId, slotId } while the slot/block editor modal is open
 
 const el = (id) => document.getElementById(id);
-function isDrill() { return ["templates","variants","active","builder","program-builder"].includes(screen); }
+function isDrill() { return ["templates","variants","preview","active","builder","program-builder"].includes(screen); }
 
 /* ---------- DERIVED DATA ---------- */
 function workoutDaysSet() { return new Set(state.history.map((w) => w.date)); }
@@ -448,6 +454,7 @@ function renderWorkout() {
   try {
     if (screen === "templates") html = templatesScreenHTML();
     else if (screen === "variants") html = variantsScreenHTML();
+    else if (screen === "preview") html = previewScreenHTML();
     else if (screen === "active") html = activeScreenHTML();
     else if (screen === "builder") html = builderScreenHTML();
     else if (screen === "program-builder") html = programBuilderScreenHTML();
@@ -664,6 +671,7 @@ function startProgramSession(program, resolved) {
     exercises: resolved.blocks.map(buildLoggableBlock)
   };
   screen = "active";
+  startElapsedTimer();
   renderWorkout();
 }
 
@@ -1169,6 +1177,59 @@ function variantsScreenHTML() {
     ${rows}`;
 }
 
+/* ---------- PREVIEW SCREEN ----------
+   Read-only look at a saved variant before starting it: what's actually
+   in the workout (sets/reps/weight/AMRAP), nothing editable. The pen
+   icon is the only way from here into the full edit/creation card;
+   BEGIN WORKOUT is the only way into the fillable active session. */
+function amrapBadgeHTML() {
+  return `<span class="amrap-badge">AMRAP</span>`;
+}
+function previewExerciseRowHTML(ex) {
+  const amrap = !!ex.repsAmrap;
+  const parts = [];
+  sortFields(ex.fields).forEach((k) => {
+    if (k === "sets") return;
+    if (k === "reps") { parts.push(amrap ? "AMRAP" : (ex.reps != null ? ex.reps : "?") + " reps"); return; }
+    if (k === "weight") { parts.push((ex.weight || 0) + " lbs"); return; }
+    if (k === "rpe") { parts.push("RPE " + ex.rpe); return; }
+    if (k === "duration") { parts.push(ex.duration + " min"); return; }
+    if (k === "distance") { parts.push(ex.distance + " " + (ex.distanceUnit || "mi")); return; }
+    if (k === "restBetweenSets") { parts.push("rest " + ex.restBetweenSets + "s"); return; }
+    if (k === "rounds") { parts.push(ex.rounds + " rounds"); return; }
+    if (k === "workSec") { parts.push(ex.workSec + "s work"); return; }
+    if (k === "restSec") { parts.push(ex.restSec + "s rest"); return; }
+  });
+  const setsLabel = ex.fields.includes("sets") ? `${ex.sets}× ` : "";
+  return `<div class="wk-exercise-card">
+    <div class="wk-ex-head" style="margin-bottom:2px;">
+      <div style="font-size:15px; font-weight:600;">${escapeHTML(ex.name)}</div>
+      ${amrap ? amrapBadgeHTML() : ""}
+    </div>
+    <div class="hint-text">${setsLabel}${parts.join(" · ") || "No fields set"}</div>
+  </div>`;
+}
+function previewScreenHTML() {
+  if (!selectedTemplate || !selectedVariant) return "";
+  const exercises = selectedVariant.exercises.map((ex) => normalizeTemplateExercise(ex));
+  const rows = exercises.map(previewExerciseRowHTML).join("");
+  return `
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+      <button class="icon-btn" id="btn-preview-back">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div style="flex:1; min-width:0;">
+        <h1 class="screen-h1" style="margin:0;">${escapeHTML(selectedTemplate.name)}</h1>
+        <p class="hint-text" style="margin:2px 0 0;">${escapeHTML(selectedVariant.name)}</p>
+      </div>
+      <button class="icon-btn" id="btn-preview-edit" aria-label="Edit this workout">${iconSVG("edit", 20)}</button>
+    </div>
+    ${rows}
+    <div class="wk-sticky-complete">
+      <button class="wk-start-btn" id="btn-begin-workout" style="margin-bottom:0;">${iconSVG("plus", 18)} BEGIN WORKOUT</button>
+    </div>`;
+}
+
 /* ---------- ACTIVE WORKOUT SCREEN ---------- */
 function hasCompletedSet() {
   if (!activeWorkout) return false;
@@ -1224,6 +1285,7 @@ function exerciseCardHTML(ex, exIdx) {
   const head = `
     <div class="wk-ex-head">
       <input type="text" class="wk-ex-name-input" data-ex-name="${exIdx}" value="${escapeHTML(ex.name)}" placeholder="Exercise / activity name" autocomplete="off">
+      ${ex.ampap ? amrapBadgeHTML() : ""}
       <div class="wk-ex-actions">
         <button class="icon-btn small" data-ex-note="${exIdx}" style="color:${ex.note ? "var(--accent)" : "var(--text-dim)"}">${iconSVG("note", 18)}</button>
         <button class="icon-btn small" data-ex-remove="${exIdx}" ${activeWorkout.exercises.length <= 1 ? "disabled style='opacity:.3'" : ""}>${iconSVG("trash", 18)}</button>
@@ -1234,24 +1296,23 @@ function exerciseCardHTML(ex, exIdx) {
   let body = "";
   if (ex.hasSets) {
     const perSetKeys = sortFields(fields).filter((k) => PER_SET_CAPABLE.includes(k));
-    const cols = `28px ${perSetKeys.map(() => "1fr").join(" ")} 22px`;
+    const cols = `28px ${perSetKeys.map(() => "1fr").join(" ")} 26px 22px`;
+    const restSeconds = Number(ex.log.restBetweenSets) || 90;
     body = `
-      <div class="wk-set-header" style="grid-template-columns:${cols};"><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div></div>
+      <div class="wk-set-header" style="grid-template-columns:${cols};"><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div><div></div></div>
       ${ex.sets.map((s, setIdx) => `
         <div class="wk-set-row" style="grid-template-columns:${cols};">
           <div class="set-num">${setIdx + 1}</div>
           ${perSetKeys.map((k) => `<input type="number" class="wk-set-input" inputmode="decimal" placeholder="${ex.ampap && k === "reps" ? "reps" : ""}" value="${s[k] != null ? s[k] : ""}" data-set-field="${exIdx}:${setIdx}:${k}">`).join("")}
+          <button type="button" class="wk-set-rest-btn" data-set-rest="${exIdx}:${restSeconds}" aria-label="Start rest timer">${iconSVG("timer", 15)}</button>
           <button class="wk-set-remove" data-set-remove="${exIdx}:${setIdx}">×</button>
         </div>`).join("")}
       <button class="wk-add-set" data-add-set="${exIdx}">+ ADD SET</button>`;
   }
   const singleKeys = sortFields(fields).filter((k) => ALWAYS_SINGLE.includes(k) || (!ex.hasSets && PER_SET_CAPABLE.includes(k)));
   if (singleKeys.length) {
-    const idleLabel = `START REST (${ex.log.restBetweenSets}s)`;
-    const isResting = restTimerState && restTimerState.exIdx === exIdx;
-    const remaining = isResting ? Math.max(0, Math.ceil((restTimerState.endsAt - Date.now()) / 1000)) : null;
     const rtBtn = (ex.hasSets && ex.log.restBetweenSets)
-      ? `<button type="button" class="rest-timer-btn ${isResting ? "running" : ""}" data-rest-timer="${exIdx}" data-rest-label="${idleLabel}">${isResting ? `RESTING… ${remaining}s` : idleLabel}</button>`
+      ? `<button type="button" class="rest-timer-btn" data-rest-timer="${exIdx}">${iconSVG("timer", 14)} START REST (${ex.log.restBetweenSets}s)</button>`
       : "";
     body += `<div class="${ex.hasSets ? "single-fields-block" : ""}">
       ${singleKeys.map((k) => {
@@ -1278,10 +1339,11 @@ function activeScreenHTML() {
       <button class="icon-btn" id="btn-active-back">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
-      <div>
-        <h1 class="screen-h1" style="margin:0;">${escapeHTML(activeWorkout.templateName)}</h1>
+      <div style="flex:1; min-width:0;">
+        <h1 class="screen-h1" style="margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTML(activeWorkout.templateName)}</h1>
         <p class="hint-text" style="margin:2px 0 0;">${escapeHTML(activeWorkout.variantName)}</p>
       </div>
+      <div class="wk-elapsed-chip" id="wk-elapsed-time">${formatElapsedShort(activeWorkout.startTime)}</div>
     </div>
     <div style="margin-bottom:16px;"></div>
     ${exercisesHTML}
@@ -1290,6 +1352,31 @@ function activeScreenHTML() {
       <button class="wk-start-btn" id="btn-complete-workout" ${canComplete ? "" : "disabled style='opacity:.4'"}>${iconSVG("check", 18)} COMPLETE WORKOUT</button>
       ${canComplete ? "" : `<p class="hint-text" style="text-align:center;">Log at least one set to complete</p>`}
     </div>`;
+}
+
+/* ---------- ELAPSED TIME (live, ticks while the active screen is up) ---------- */
+let elapsedTimerHandle = null;
+function formatElapsedShort(startISO) {
+  const ms = Date.now() - new Date(startISO).getTime();
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+function stopElapsedTimer() {
+  if (elapsedTimerHandle) clearInterval(elapsedTimerHandle);
+  elapsedTimerHandle = null;
+}
+function startElapsedTimer() {
+  stopElapsedTimer();
+  // Looks up the DOM node fresh every tick (never caches a reference)
+  // because renderWorkout() replaces #workout-screen's innerHTML on
+  // nearly every interaction — a cached node would go stale immediately.
+  elapsedTimerHandle = setInterval(() => {
+    if (screen !== "active" || !activeWorkout) { stopElapsedTimer(); return; }
+    const chip = el("wk-elapsed-time");
+    if (chip) chip.textContent = formatElapsedShort(activeWorkout.startTime);
+  }, 1000);
 }
 
 /* ---------- DURATION (startTime/endTime -> readable label) ---------- */
@@ -1301,6 +1388,10 @@ function formatDuration(startISO, endISO) {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return h > 0 ? `${h}H ${m}M` : `${m}M`;
+}
+function fmtTimeOfDay(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 /* ---------- HISTORY SCREEN ---------- */
@@ -1320,9 +1411,10 @@ function historyScreenHTML() {
       const count = completedExercisesOf(w).length;
       const progTag = w.programId ? `<span class="status-badge active" style="margin-left:6px;">PROGRAM</span>` : "";
       const dur = formatDuration(w.startTime, w.endTime);
+      const tod = fmtTimeOfDay(w.startTime);
       return `<button class="wk-history-row" data-open-history="${w.id}">
         <span><span class="hr-name">${escapeHTML(w.templateName)}${progTag}</span><br><span class="hr-sub">${escapeHTML(w.variantName)}</span></span>
-        <span><span class="hr-date">${fmtWeekdayShort(w.date)}</span><br><span class="hr-count">${count} exercise${count !== 1 ? "s" : ""}${dur ? " · " + dur : ""}</span></span>
+        <span><span class="hr-date">${fmtWeekdayShort(w.date)}${tod ? " · " + tod : ""}</span><br><span class="hr-count">${count} exercise${count !== 1 ? "s" : ""}${dur ? " · " + dur : ""}</span></span>
       </button>`;
     }).join("")}`).join("");
   return `<h1 class="screen-h1">WORKOUT HISTORY</h1>${blocks}`;
@@ -1480,10 +1572,22 @@ function attachScreenHandlers() {
   // VARIANTS
   document.querySelectorAll("[data-select-variant]").forEach((b) => b.onclick = () => {
     const variant = selectedTemplate.variants.find((v) => v.id === b.getAttribute("data-select-variant"));
-    selectVariant(variant);
+    openPreview(variant);
   });
   const vBack = el("btn-variants-back");
   if (vBack) vBack.onclick = () => { screen = "templates"; renderWorkout(); };
+
+  // PREVIEW
+  const pBack = el("btn-preview-back");
+  if (pBack) pBack.onclick = () => { screen = "variants"; renderWorkout(); };
+  const pEdit = el("btn-preview-edit");
+  if (pEdit) pEdit.onclick = () => {
+    const variantIdx = selectedTemplate.variants.findIndex((v) => v.id === selectedVariant.id);
+    openBuilder(selectedTemplate);
+    if (variantIdx >= 0) { builder.activeVar = variantIdx; renderWorkout(); }
+  };
+  const beginBtn = el("btn-begin-workout");
+  if (beginBtn) beginBtn.onclick = () => beginWorkout(selectedTemplate, selectedVariant);
 
   // ACTIVE WORKOUT
   document.querySelectorAll("[data-ex-name]").forEach((inp) => {
@@ -1509,6 +1613,7 @@ function attachScreenHandlers() {
         if (sample != null && sample !== "") snapshot[k] = sample;
       });
       if (ex.hasSets) snapshot.sets = ex.sets.length;
+      snapshot.ampap = !!ex.ampap;
       upsertLibraryEntry(e.target.value, ex.fields, snapshot);
     };
   });
@@ -1541,12 +1646,13 @@ function attachScreenHandlers() {
     ex.sets.push(row);
     renderWorkout();
   });
-  document.querySelectorAll("[data-rest-timer]").forEach((b) => b.onclick = () => startRestTimer(Number(b.getAttribute("data-rest-timer")), b));
+  document.querySelectorAll("[data-rest-timer]").forEach((b) => b.onclick = () => startRestTimer(Number(b.getAttribute("data-rest-timer"))));
+  document.querySelectorAll("[data-set-rest]").forEach((b) => b.onclick = () => {
+    const [exIdx, seconds] = b.getAttribute("data-set-rest").split(":");
+    startRestTimer(Number(exIdx), Number(seconds));
+  });
   const addExBtn = el("btn-add-exercise");
-  if (addExBtn) addExBtn.onclick = () => {
-    activeWorkout.exercises.push(buildLoggable("", ["sets","reps","weight"], { sets: 3 }, { id: "e-" + uid() }));
-    renderWorkout();
-  };
+  if (addExBtn) addExBtn.onclick = () => openExercisePicker();
   const completeBtn = el("btn-complete-workout");
   if (completeBtn) completeBtn.onclick = () => { if (hasCompletedSet()) completeWorkout(); };
   const activeBack = el("btn-active-back");
@@ -1627,6 +1733,7 @@ function attachScreenHandlers() {
       ex.name = e.target.value;
       const snapshot = {};
       ex.fields.forEach((k) => { if (ex[k] != null) snapshot[k] = ex[k]; });
+      snapshot.ampap = !!ex.repsAmrap;
       upsertLibraryEntry(e.target.value, ex.fields, snapshot);
     };
   });
@@ -1745,18 +1852,29 @@ function attachScreenHandlers() {
 }
 
 /* ---------- ACTIONS ---------- */
-function selectVariant(variant) {
+function openPreview(variant) {
+  selectedVariant = variant;
+  screen = "preview";
+  renderWorkout();
+}
+function beginWorkout(template, variant) {
+  selectedTemplate = template;
   selectedVariant = variant;
   const exercises = variant.exercises.map((ex) => {
     const norm = normalizeTemplateExercise(ex);
-    return buildLoggable(norm.name, norm.fields, norm, {});
+    // Carry the AMRAP flag through to the loggable exercise (buildLoggable's
+    // opts.ampap both marks it and starts the reps column blank instead of
+    // pre-filled with a stale default) — previously dropped here, which is
+    // why AMRAP silently vanished the moment a workout actually started.
+    return buildLoggable(norm.name, norm.fields, norm, { ampap: !!norm.repsAmrap });
   });
   activeWorkout = {
-    templateId: selectedTemplate.id, templateName: selectedTemplate.name,
+    templateId: template.id, templateName: template.name,
     variantId: variant.id, variantName: variant.name,
     startTime: new Date().toISOString(), exercises
   };
   screen = "active";
+  startElapsedTimer();
   renderWorkout();
 }
 
@@ -1818,30 +1936,65 @@ function playRestCompleteAlert() {
   } catch (e) { /* audio unavailable — toast + vibration still fire */ }
   try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* ignore */ }
 }
-function startRestTimer(exIdx) {
+// Rest now takes over the whole screen (a small inline countdown was easy
+// to miss mid-set) — starting it opens #wk-rest-fullscreen-overlay, ticks
+// a big countdown, beeps + vibrates via the existing alert, then fades
+// itself out and drops you straight back into the active workout. exIdx
+// is kept only so a future "which exercise am I resting from" affordance
+// could use it; the countdown itself doesn't depend on the active screen
+// still being rendered underneath.
+function startRestTimer(exIdx, secondsOverride) {
   const ex = activeWorkout.exercises[exIdx];
-  const seconds = Number(ex.log.restBetweenSets) || 60;
+  const seconds = secondsOverride || Number(ex.log.restBetweenSets) || 90;
   restTimerState = { exIdx, endsAt: Date.now() + seconds * 1000 };
-  tickRestTimer();
+  openRestFullscreen();
+  tickRestTimerFullscreen();
 }
-function tickRestTimer() {
+function openRestFullscreen() {
+  const overlay = el("wk-rest-fullscreen-overlay");
+  if (overlay) overlay.classList.add("open");
+}
+function closeRestFullscreen() {
+  const overlay = el("wk-rest-fullscreen-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+function fmtCountdown(totalSec) {
+  totalSec = Math.max(0, totalSec);
+  const m = Math.floor(totalSec / 60), s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+function tickRestTimerFullscreen() {
   clearTimeout(restTimerHandle);
-  if (!restTimerState) return;
+  if (!restTimerState) { closeRestFullscreen(); return; }
   const remaining = Math.ceil((restTimerState.endsAt - Date.now()) / 1000);
-  const btn = document.querySelector(`[data-rest-timer="${restTimerState.exIdx}"]`);
+  const countdownEl = el("wk-rest-countdown");
   if (remaining <= 0) {
-    const idleLabel = btn ? btn.getAttribute("data-rest-label") : null;
     restTimerState = null;
-    if (btn && idleLabel) { btn.textContent = idleLabel; btn.classList.remove("running"); }
+    if (countdownEl) { countdownEl.textContent = fmtCountdown(0); countdownEl.classList.add("done"); }
     window.showToast && window.showToast("REST COMPLETE");
     playRestCompleteAlert();
+    setTimeout(() => { closeRestFullscreen(); if (countdownEl) countdownEl.classList.remove("done"); }, 700);
     return;
   }
-  if (btn) { btn.textContent = `RESTING… ${remaining}s`; btn.classList.add("running"); }
-  restTimerHandle = setTimeout(tickRestTimer, 250);
+  if (countdownEl) countdownEl.textContent = fmtCountdown(remaining);
+  restTimerHandle = setTimeout(tickRestTimerFullscreen, 250);
+}
+function adjustRestTimer(deltaSec) {
+  if (!restTimerState) return;
+  restTimerState.endsAt = Math.max(Date.now() + 1000, restTimerState.endsAt + deltaSec * 1000);
+}
+function skipRestTimer() {
+  clearTimeout(restTimerHandle);
+  restTimerState = null;
+  closeRestFullscreen();
 }
 
 function completeWorkout() {
+  stopElapsedTimer();
+  skipRestTimer();
+  // startTime is a full ISO timestamp, so the exact time of day the
+  // workout happened is preserved automatically — surfaced via
+  // fmtTimeOfDay() in History, nothing extra to compute or store here.
   const completed = { ...activeWorkout, id: uid(), endTime: new Date().toISOString(), date: formatDate(new Date()) };
   state.history = [completed, ...state.history];
   save();
@@ -1857,10 +2010,61 @@ function backFromActive() {
 }
 function discardWorkout() {
   closeModal("wk-discard-overlay");
+  stopElapsedTimer();
+  skipRestTimer();
   const wasProgram = !!(activeWorkout && activeWorkout.programId);
   noteExIdx = null; activeWorkout = null; selectedVariant = null;
   screen = wasProgram ? null : "variants";
   if (wasProgram) tab = "home";
+  renderWorkout();
+}
+
+/* ---------- EXERCISE PICKER (add-exercise mid-workout) ----------
+   "+ ADD EXERCISE" now opens a browsable/searchable list of everything in
+   the exercise library (built from every exercise you've ever named,
+   across every workout) instead of dropping in a blank row — reuses
+   searchLibrary/buildLoggable, same as the name-autocomplete already did,
+   just surfaced as a full picker instead of type-to-filter-only. Typing a
+   name with no match still offers "add as new", so first-time use (empty
+   library) and genuinely new exercises both still work. ---------- */
+let exercisePickerQuery = "";
+function openExercisePicker() {
+  exercisePickerQuery = "";
+  const search = el("wk-ex-picker-search");
+  if (search) search.value = "";
+  renderExercisePickerList();
+  openSheet("wk-exercise-picker-overlay");
+  setTimeout(() => { if (search) search.focus(); }, 50);
+}
+function renderExercisePickerList() {
+  const q = exercisePickerQuery.trim().toLowerCase();
+  const all = state.exerciseLibrary.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const matches = q ? all.filter((e) => e.name.toLowerCase().includes(q)) : all;
+  const exactMatch = all.some((e) => e.name.toLowerCase() === q);
+  const rows = matches.map((e) => `<button type="button" class="wk-ex-picker-row" data-pick-ex="${escapeHTML(e.name)}">
+    <span class="epr-name">${escapeHTML(e.name)}${e.ampap ? amrapBadgeHTML() : ""}</span>
+    <span class="epr-sub">${e.fields.map((f) => (FIELD_DEFS[f] || {}).label || f).join(" · ") || "No fields"}</span>
+  </button>`).join("");
+  const rawQuery = (el("wk-ex-picker-search") ? el("wk-ex-picker-search").value : "").trim();
+  const addNewHTML = (rawQuery && !exactMatch)
+    ? `<button type="button" class="wk-ex-picker-row new" data-pick-ex-new="1">+ ADD "${escapeHTML(rawQuery)}" AS NEW EXERCISE</button>`
+    : "";
+  const emptyHTML = (!matches.length && !addNewHTML)
+    ? `<p class="hint-text" style="padding:16px 4px; text-align:center;">${state.exerciseLibrary.length ? "No matches." : "No saved exercises yet — type a name to add a new one."}</p>`
+    : "";
+  el("wk-ex-picker-list").innerHTML = addNewHTML + rows + emptyHTML;
+  document.querySelectorAll("[data-pick-ex]").forEach((b) => b.onclick = () => pickExerciseFromLibrary(b.getAttribute("data-pick-ex"), false));
+  const addBtn = document.querySelector("[data-pick-ex-new]");
+  if (addBtn) addBtn.onclick = () => pickExerciseFromLibrary(rawQuery, true);
+}
+function pickExerciseFromLibrary(name, isNew) {
+  closeSheet("wk-exercise-picker-overlay");
+  if (!activeWorkout) return;
+  const entry = !isNew ? state.exerciseLibrary.find((e) => e.name.toLowerCase() === (name || "").toLowerCase()) : null;
+  const loggable = entry
+    ? buildLoggable(entry.name, entry.fields, entry.values, { id: "e-" + uid(), ampap: !!entry.ampap })
+    : buildLoggable(name || "", ["sets","reps","weight"], { sets: 3 }, { id: "e-" + uid() });
+  activeWorkout.exercises.push(loggable);
   renderWorkout();
 }
 
@@ -1960,7 +2164,21 @@ el("wk-slot-editor-overlay").addEventListener("click", (e) => { if (e.target.id 
 
 el("btn-discard-cancel").onclick = () => closeModal("wk-discard-overlay");
 el("btn-discard-confirm").onclick = discardWorkout;
+el("btn-discard-save").onclick = () => {
+  closeModal("wk-discard-overlay");
+  if (hasCompletedSet()) completeWorkout();
+};
 el("wk-discard-overlay").addEventListener("click", (e) => { if (e.target.id === "wk-discard-overlay") closeModal("wk-discard-overlay"); });
+
+// Exercise picker sheet (add-exercise mid-workout)
+el("btn-close-ex-picker").addEventListener("click", () => closeSheet("wk-exercise-picker-overlay"));
+el("wk-exercise-picker-overlay").addEventListener("click", (e) => { if (e.target.id === "wk-exercise-picker-overlay") closeSheet("wk-exercise-picker-overlay"); });
+el("wk-ex-picker-search").addEventListener("input", (e) => { exercisePickerQuery = e.target.value; renderExercisePickerList(); });
+
+// Fullscreen rest timer controls
+el("btn-rest-minus15").addEventListener("click", () => adjustRestTimer(-15));
+el("btn-rest-plus15").addEventListener("click", () => adjustRestTimer(15));
+el("btn-rest-skip").addEventListener("click", skipRestTimer);
 
 function detailBlockHTML(ex) {
   if (ex.fields) return detailBlockHTMLNew(ex);
@@ -1972,7 +2190,7 @@ function detailBlockHTMLNew(ex) {
     const perSetKeys = sortFields(ex.fields).filter((k) => PER_SET_CAPABLE.includes(k));
     const singleKeys = sortFields(ex.fields).filter((k) => ALWAYS_SINGLE.includes(k));
     return `<div class="wk-detail-block">
-      <div class="db-name">${escapeHTML(ex.name)}</div>
+      <div class="db-name">${escapeHTML(ex.name)}${ex.ampap ? amrapBadgeHTML() : ""}</div>
       <div class="wk-detail-set" style="grid-template-columns:28px repeat(${perSetKeys.length},1fr);">
         <span class="num">#</span>${perSetKeys.map((k) => `<span>${rowLabel[k] || k.toUpperCase()}</span>`).join("")}
       </div>
@@ -2029,8 +2247,9 @@ function openHistoryDetail(id) {
   if (!w) return;
   selectedHistoryId = id;
   const dur = formatDuration(w.startTime, w.endTime);
+  const tod = fmtTimeOfDay(w.startTime);
   el("wk-detail-title").textContent = w.templateName;
-  el("wk-detail-sub").textContent = `${w.variantName} · ${fmtFullDate(w.date)}${dur ? " · " + dur : ""}`;
+  el("wk-detail-sub").textContent = `${w.variantName} · ${fmtFullDate(w.date)}${tod ? " · " + tod : ""}${dur ? " · " + dur : ""}`;
   const exercises = completedExercisesOf(w);
   el("wk-detail-body").innerHTML = exercises.length ? exercises.map(detailBlockHTML).join("") : `<p class="hint-text">No completed sets recorded.</p>`;
   el("wk-detail-ex-count").textContent = exercises.length;
