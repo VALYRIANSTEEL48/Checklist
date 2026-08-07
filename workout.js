@@ -2293,6 +2293,13 @@ function attachSwipeTabs(containerEl, tabs, getCurrentTab, onSwipe) {
   containerEl.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     startX = e.clientX; startY = e.clientY; tracking = true;
+    // Without capture, a real swipe that drifts outside this element's
+    // box before the finger lifts fires pointerup on whatever happens to
+    // be under the finger at that moment — which might not even be a
+    // descendant of containerEl, so the listener below would never see
+    // it. Capturing pins all of this pointer's subsequent events to
+    // containerEl regardless of where it physically ends up.
+    try { containerEl.setPointerCapture(e.pointerId); } catch (err) { /* best-effort only */ }
   });
   containerEl.addEventListener("pointerup", (e) => {
     if (!tracking || startX === null) { tracking = false; return; }

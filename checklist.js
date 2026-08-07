@@ -594,20 +594,60 @@ function toggleComplete(taskId) {
    throwing) if a re-render replaces the list mid-gesture. */
 let dragState = null;
 let dragOverEl = null;
+// A drag only actually starts after holding the handle still for this
+// long — short taps/brushes across the handle (which sits right next to
+// the row's other interactive bits) were triggering a reorder far too
+// easily. Standard "long-press to reorder" pattern (like a home-screen
+// icon rearrange), not an immediate-on-touch drag.
+const DRAG_HOLD_MS = 750;
+const DRAG_HOLD_CANCEL_PX = 10; // movement past this during the hold cancels it (probably a scroll, not a long-press)
+let pendingDrag = null; // { timer, li, list, handle, pointerId, startX, startY }
+
 function attachDragHandlers() {
   document.querySelectorAll("[data-drag]").forEach((handle) => {
-    handle.onpointerdown = (e) => startDrag(e, handle);
+    handle.onpointerdown = (e) => armDrag(e, handle);
   });
 }
 
-function startDrag(e, handle) {
-  e.preventDefault();
+function armDrag(e, handle) {
+  cancelPendingDrag();
   const li = handle.closest("li.task-item");
   const list = li ? li.closest("[data-group-list]") : null;
   if (!li || !list) return;
+  const pointerId = e.pointerId;
+  const startX = e.clientX, startY = e.clientY;
+  pendingDrag = {
+    handle, li, list, pointerId, startX, startY,
+    timer: setTimeout(() => { pendingDrag = null; beginDrag(handle, li, list, pointerId); }, DRAG_HOLD_MS)
+  };
+  document.addEventListener("pointermove", onPendingDragMove);
+  document.addEventListener("pointerup", onPendingDragRelease);
+  document.addEventListener("pointercancel", onPendingDragRelease);
+}
+function onPendingDragMove(e) {
+  if (!pendingDrag || e.pointerId !== pendingDrag.pointerId) return;
+  const dx = e.clientX - pendingDrag.startX, dy = e.clientY - pendingDrag.startY;
+  if (Math.abs(dx) > DRAG_HOLD_CANCEL_PX || Math.abs(dy) > DRAG_HOLD_CANCEL_PX) cancelPendingDrag();
+}
+function onPendingDragRelease(e) {
+  if (!pendingDrag || e.pointerId !== pendingDrag.pointerId) return;
+  cancelPendingDrag();
+}
+function cancelPendingDrag() {
+  if (pendingDrag) clearTimeout(pendingDrag.timer);
+  pendingDrag = null;
+  document.removeEventListener("pointermove", onPendingDragMove);
+  document.removeEventListener("pointerup", onPendingDragRelease);
+  document.removeEventListener("pointercancel", onPendingDragRelease);
+}
+
+function beginDrag(handle, li, list, pointerId) {
+  cancelPendingDrag(); // clears the (already-consumed) hold-phase listeners
+  if (!document.contains(li) || !document.contains(list)) return; // re-rendered away mid-hold
   dragState = { id: handle.getAttribute("data-drag"), li, list };
   li.classList.add("dragging");
-  try { handle.setPointerCapture(e.pointerId); } catch (err) { /* best-effort only */ }
+  try { handle.setPointerCapture(pointerId); } catch (err) { /* best-effort only */ }
+  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) { /* not supported, ignore */ } }
   document.addEventListener("pointermove", onDragMove);
   document.addEventListener("pointerup", endDrag);
   document.addEventListener("pointercancel", endDrag);
@@ -717,7 +757,12 @@ function openTaskSheet(taskId) {
     b.classList.toggle("active", days.includes(Number(b.getAttribute("data-day"))));
   });
 
-  calSelected = t && t.recurrence === "oneoff" ? t.date : getTrackingDateStr();
+  // A one-off task that's unscheduled ("anytime") has no date at all —
+  // t.date is null in that case (this is exactly what the quick-add bar
+  // produces by default). Fall back to today so the calendar always has
+  // something valid to open on if the person later switches this task
+  // over to SCHEDULED.
+  calSelected = (t && t.recurrence === "oneoff" && t.date) ? t.date : getTrackingDateStr();
   calView = strToDate(calSelected);
   el("input-time").value = t ? (t.time || "07:00") : "07:00";
   el("input-duration").value = t && t.duration ? t.duration : "";
@@ -993,7 +1038,40 @@ function closeSheet(id) { el(id).classList.remove("open"); }
 });
 el("action-overlay").addEventListener("click", (e) => { if (e.target.id === "action-overlay") closeSheet("action-overlay"); });
 
-el("btn-add").addEventListener("click", () => openTaskSheet(null));
+// Quick-add bar (replaces the old "+" FAB): a fast, no-sheet way to
+// capture a task. Always creates a one-off, unscheduled ("anytime") task
+// — the same defaults the full task sheet starts from for a brand-new
+// task — and it can be opened afterward from its row to fine-tune
+// recurrence/scheduling/etc. Mirrors btn-save-task's new-task branch so
+// the two paths can never drift into producing differently-shaped tasks.
+function addQuickTask() {
+  const input = el("input-quick-task");
+  const name = input.value.trim();
+  if (!name) { flashInvalid(input); return; }
+  const maxOrder = state.tasks.reduce((m, x) => Math.max(m, x.order || 0), 0);
+  state.tasks.push({
+    id: uid(),
+    name,
+    recurrence: "oneoff",
+    timing: "anytime",
+    days: [],
+    time: null,
+    duration: null,
+    date: null,
+    createdAt: new Date().toISOString(),
+    paused: false,
+    order: maxOrder + 1,
+    completions: {}
+  });
+  save();
+  input.value = "";
+  render();
+  toast("TASK ADDED");
+}
+el("btn-quick-task-add").addEventListener("click", addQuickTask);
+el("input-quick-task").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addQuickTask();
+});
 el("btn-add-group").addEventListener("click", () => {
   el("input-group-name").value = "";
   openSheet("group-new-overlay");
