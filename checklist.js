@@ -241,6 +241,33 @@ function historyTape(days) {
   return out;
 }
 
+// Display-only aggregate: everything actually on your plate today, i.e.
+// renderChecklist()'s own visibility rule (repeating tasks due today, plus
+// one-off scheduled tasks that are today's or still-overdue-and-incomplete,
+// plus one-off anytime tasks not yet completed) rather than the strict
+// due-date engine above. Deliberately broader than getDueTasks(): a
+// carried-forward overdue one-off should count toward "how much is left
+// today" even though it shouldn't retroactively affect a past day's streak.
+// Never feed this into isDayComplete/computeMainStreak/computeTaskStats —
+// those intentionally stay on the strict engine.
+function getTallyTasks(today) {
+  const repeatingDue = getDueTasks(today).filter((t) => t.recurrence === "repeating");
+  const oneOffs = state.tasks.filter((t) => {
+    if (t.paused || t.recurrence === "repeating") return false;
+    if (t.timing === "scheduled") {
+      return t.date === today || (t.date < today && !isCompletedOn(t, t.date));
+    }
+    const created = taskCreatedDateStr(t);
+    return !hasEverCompleted(t) || isCompletedOn(t, today) || created === today;
+  });
+  return repeatingDue.concat(oneOffs);
+}
+function isTallyDone(t, today) {
+  return (t.recurrence === "oneoff" && t.timing === "scheduled")
+    ? isCompletedOn(t, t.date)
+    : isCompletedOn(t, today);
+}
+
 /* ---------- RENDER ---------- */
 const el = (id) => document.getElementById(id);
 
@@ -302,14 +329,14 @@ function render() {
   el("tracking-date-label").textContent = usesCustomReset ? "OPS DAY" : "TODAY";
   el("tracking-date-value").textContent = `${WEEKDAY_LABELS[weekdayOf(today)]} ${fmtDateShort(today)}`;
 
-  const due = getDueTasks(today);
-  const doneCount = due.filter((t) => isCompletedOn(t, today)).length;
-  const pct = due.length ? Math.round((doneCount / due.length) * 100) : 100;
+  const tally = getTallyTasks(today);
+  const doneCount = tally.filter((t) => isTallyDone(t, today)).length;
+  const pct = tally.length ? Math.round((doneCount / tally.length) * 100) : 100;
   el("today-progress-fill").style.width = pct + "%";
 
   const tape = historyTape(14);
   el("history-tape").innerHTML = tape.map((d) =>
-    `<div class="hb ${d.state}" title="${d.ds}"></div>`).join("");
+    `<div class="hb ${d.state}" title="${d.ds}"><span>${WEEKDAY_LABELS[weekdayOf(d.ds)][0]}</span></div>`).join("");
 
   renderChecklist(today);
 }
@@ -788,8 +815,8 @@ window.ChecklistData = {
   // remaining task of any kind). Resolved on demand, nothing stored.
   todaySummary: () => {
     const today = getTrackingDateStr();
-    const due = getDueTasks(today);
-    const remaining = due.filter((t) => !isCompletedOn(t, today));
+    const tally = getTallyTasks(today);
+    const remaining = tally.filter((t) => !isTallyDone(t, today));
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const scheduledRemaining = remaining
@@ -802,8 +829,8 @@ window.ChecklistData = {
     const next = upcoming || scheduledRemaining[0] || remaining[0] || null;
     return {
       streak: computeMainStreak(),
-      due: due.length,
-      done: due.length - remaining.length,
+      due: tally.length,
+      done: tally.length - remaining.length,
       remaining: remaining.length,
       next: next ? { name: next.name, time: (next.timing === "scheduled" && next.time) ? next.time : null } : null
     };

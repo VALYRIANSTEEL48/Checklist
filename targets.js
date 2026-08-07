@@ -55,6 +55,18 @@ function escapeHTML(s) {
   d.textContent = s == null ? "" : String(s);
   return d.innerHTML;
 }
+function targetIconSVG(size) {
+  size = size || 20;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`;
+}
+function cogIconSVG(size) {
+  size = size || 16;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
+}
+function flameIconSVG(size) {
+  size = size || 14;
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>`;
+}
 
 /* ---------- STREAK ENGINE (pure) ---------- */
 function sortedRelapseDates(habit) {
@@ -104,24 +116,99 @@ function totalCleanDaysEver(habit, today) {
   return total;
 }
 
-function historyTape(habit, days, today) {
+function streakAnchor(habit) {
+  const dates = sortedRelapseDates(habit);
+  const lastRelapse = dates.length ? dates[dates.length - 1] : null;
+  return lastRelapse && lastRelapse > habit.startDate ? lastRelapse : habit.startDate;
+}
+
+/* ---------- CONTRIBUTION-GRAPH HEATMAP ----------
+   GitHub-style: weeks as columns (Sun..Sat top-to-bottom), aligned so the
+   most recent column ends on today. Shared by the card (compact, no
+   labels) and the read-only detail view (full, with weekday/month
+   labels). Cells are emitted column-major (week 0's 7 days, then week
+   1's 7 days, ...) to match `grid-auto-flow: column` in CSS. */
+function contributionCells(habit, weeksCount, today) {
   today = today || todayStr();
-  const relapseDateSet = new Set(sortedRelapseDates(habit));
-  const out = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const ds = addDaysStr(today, -i);
-    if (ds < habit.startDate) { out.push({ date: ds, state: "before-start" }); continue; }
-    if (ds > today) { out.push({ date: ds, state: "future" }); continue; }
-    out.push({ date: ds, state: relapseDateSet.has(ds) ? "relapse" : "clean" });
+  const dow = new Date(today + "T12:00:00").getDay();
+  const startOfThisWeek = addDaysStr(today, -dow);
+  const gridStart = addDaysStr(startOfThisWeek, -(weeksCount - 1) * 7);
+  const relapseSet = new Set(sortedRelapseDates(habit));
+  const anchor = streakAnchor(habit);
+  const cells = [];
+  for (let i = 0; i < weeksCount * 7; i++) {
+    const ds = addDaysStr(gridStart, i);
+    let cellState;
+    if (ds > today) cellState = "future";
+    else if (ds < habit.startDate) cellState = "before-start";
+    else if (relapseSet.has(ds)) cellState = "relapse";
+    else cellState = ds >= anchor ? "current" : "clean";
+    cells.push({ date: ds, state: cellState });
   }
-  return out;
+  return cells;
+}
+const WEEKDAY_LABEL_COLS = ["", "", "TU", "", "TH", "", "SA"]; // Sun..Sat, alternating like a GitHub graph
+function contributionMonthLabels(cells, weeksCount) {
+  const labels = new Array(weeksCount).fill("");
+  let lastMonth = null;
+  for (let col = 0; col < weeksCount; col++) {
+    const sunday = cells[col * 7];
+    const m = new Date(sunday.date + "T12:00:00").getMonth();
+    if (m !== lastMonth) { labels[col] = MONTH_LABELS[m].slice(0, 3); lastMonth = m; }
+  }
+  return labels;
+}
+function contributionGridHTML(habit, weeksCount, today, compact) {
+  const cells = contributionCells(habit, weeksCount, today);
+  const gridCells = cells.map((c) => `<div class="tg-cc ${c.state}" title="${c.date}"></div>`).join("");
+  const gridHTML = `<div class="tg-contrib-grid" style="grid-template-columns:repeat(${weeksCount},1fr);">${gridCells}</div>`;
+  if (compact) return `<div class="tg-contrib compact">${gridHTML}</div>`;
+  const monthsHTML = contributionMonthLabels(cells, weeksCount).map((m) => `<div>${m}</div>`).join("");
+  const wdHTML = WEEKDAY_LABEL_COLS.map((w) => `<span>${w}</span>`).join("");
+  return `<div class="tg-contrib">
+    <div class="tg-contrib-top">
+      <div class="tg-contrib-weekdays">${wdHTML}</div>
+      <div class="tg-contrib-body">
+        <div class="tg-contrib-months" style="grid-template-columns:repeat(${weeksCount},1fr);">${monthsHTML}</div>
+        ${gridHTML}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Read-only month calendar for the detail view: dot = a clean day since
+   habit start, filled = inside the current unbroken streak, red outline
+   = a logged relapse. Purely informational, no click handlers. */
+function viewCalendarGridHTML(view, habit, today) {
+  const y = view.getFullYear(), m = view.getMonth();
+  const first = new Date(y, m, 1);
+  const gridStart = new Date(y, m, 1 - first.getDay());
+  const relapseSet = new Set(sortedRelapseDates(habit));
+  const anchor = streakAnchor(habit);
+  let html = "";
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart); d.setDate(gridStart.getDate() + i);
+    const ds = formatDate(d);
+    const cls = [];
+    if (d.getMonth() !== m) cls.push("other-month");
+    if (ds === today) cls.push("today");
+    if (relapseSet.has(ds)) {
+      cls.push("relapse-day");
+    } else if (ds >= habit.startDate && ds <= today) {
+      cls.push("tracked-day");
+      if (ds >= anchor) cls.push("current-streak-day");
+    }
+    html += `<button type="button" class="${cls.join(" ")}" disabled>${d.getDate()}</button>`;
+  }
+  return html;
 }
 
 /* ---------- RUNTIME (non-persisted) STATE ---------- */
-let screen = null;          // null | 'detail'
+let screen = null;          // null | 'view' | 'edit'
 let editingId = null;       // habit id being viewed, or null while creating
 let draft = null;           // in-memory record while creating
-let tgCalView = new Date(); // start-date picker month cursor (detail screen)
+let tgCalView = new Date(); // start-date picker month cursor (edit screen)
+let tgDetailCalView = new Date(); // read-only streak calendar cursor (view screen)
 let relapseCalView = new Date();
 let relapseDate = null;     // selected date in the log-relapse sheet
 let relapseTargetValue = 90;
@@ -138,7 +225,7 @@ function render() {
   let html;
   let hadError = false;
   try {
-    html = screen === "detail" ? detailScreenHTML() : listScreenHTML();
+    html = screen === "edit" ? detailScreenHTML() : screen === "view" ? viewScreenHTML() : listScreenHTML();
   } catch (err) {
     console.error("Targets render error:", err);
     html = errorScreenHTML(err);
@@ -188,27 +275,26 @@ function listScreenHTML() {
       <div class="tg-readout-block"><div class="readout-label">TERMINATED</div><div class="readout-value" style="font-size:26px;">${pad2(terminated.length)}</div></div>
     </div>`;
 
-  // Pulls Targets' visual identity toward Checklist's streak header (big
-  // dominant number) instead of Assignments' project-card look — the
-  // streak count is the single most important thing on this card, so it
-  // gets readout-value-scale treatment, with a compact history strip
-  // underneath reading as "here's your actual history" rather than a
-  // percentage bar.
+  // Tapping the card opens a read-only view (name, description, heatmap,
+  // streak calendar); the cog is the only route into full edit/settings.
   const cardHTML = (h) => {
     const streak = currentStreakDays(h, today);
     const term = isTerminated(h, today);
-    const tape = historyTape(h, 14, today);
-    const tapeHTML = tape.map((t) => `<div class="hb ${t.state}" title="${t.date}"></div>`).join("");
-    return `<button class="habit-card ${term ? "terminated" : ""}" data-open-habit="${h.id}">
-      <div class="hc-hero">
-        <div class="hc-streak-big">${streak}</div>
-        <div class="hc-hero-body">
-          <div class="hc-name">${escapeHTML(h.name)}</div>
-          <div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"}</div>
+    const heatmap = contributionGridHTML(h, 18, today, true);
+    return `<div class="habit-card ${term ? "terminated" : ""}">
+      <button class="hc-open" data-open-habit="${h.id}">
+        <div class="hc-hero">
+          <div class="hc-icon">${targetIconSVG(18)}</div>
+          <div class="hc-hero-body">
+            <div class="hc-name">${escapeHTML(h.name)}</div>
+            <div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"}</div>
+          </div>
+          <div class="hc-streak-pill">${streak}<span>D</span></div>
         </div>
-      </div>
-      <div class="tg-history-tape">${tapeHTML}</div>
-    </button>`;
+        ${heatmap}
+      </button>
+      <button class="hc-settings-btn" data-edit-habit="${h.id}" aria-label="Target settings">${cogIconSVG(15)}</button>
+    </div>`;
   };
 
   return `<h1 class="screen-h1">TARGETS</h1>
@@ -217,6 +303,47 @@ function listScreenHTML() {
     ${state.habits.length === 0 ? `<p class="hint-text" style="text-align:center; padding:30px 0;">No targets yet. Add one above.</p>` : ""}
     ${active.length ? `<h2 class="group-title"><span class="tick"></span>IN PROGRESS</h2>${active.map(cardHTML).join("")}` : ""}
     ${terminated.length ? `<h2 class="group-title muted" style="margin-top:22px;"><span class="tick"></span>TERMINATED</h2>${terminated.map(cardHTML).join("")}` : ""}`;
+}
+
+/* ---------- READ-ONLY VIEW SCREEN ----------
+   Opened by tapping a card: name, description, heatmap, streak calendar.
+   No editable fields here — the cog (on the card, and again in this
+   screen's pill row) is the only way into the full edit/settings screen. */
+function viewScreenHTML() {
+  const h = currentHabit();
+  if (!h) return "";
+  const today = todayStr();
+  const streak = currentStreakDays(h, today);
+  const term = isTerminated(h, today);
+  const heatmap = contributionGridHTML(h, 26, today, false);
+
+  return `
+    <div class="tg-view-header">
+      <div class="tg-view-icon">${targetIconSVG(20)}</div>
+      <div class="tg-view-titles">
+        <div class="tg-view-name">${escapeHTML(h.name)}</div>
+        <div class="tg-view-sub">${h.reason ? escapeHTML(h.reason) : "No description"}</div>
+      </div>
+      <button class="icon-btn" id="btn-tg-view-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg>
+      </button>
+    </div>
+    ${heatmap}
+    <div class="tg-view-pills">
+      <span class="tg-status-badge ${term ? "terminated" : "active"}" style="margin:0;">${term ? "TERMINATED" : "TARGET " + h.targetDays + "D"}</span>
+      <span class="tg-flame-pill">${flameIconSVG(13)}${streak}</span>
+      <button class="hc-settings-btn" id="btn-tg-view-edit" aria-label="Target settings">${cogIconSVG(15)}</button>
+    </div>
+    <div class="calendar-panel corner-bracket" style="margin-top:16px;">
+      <div class="cal-header">
+        <button type="button" id="tg-view-cal-prev" class="icon-btn small">‹</button>
+        <div>${tgDetailCalView.toLocaleDateString("default", { month: "long", year: "numeric" }).toUpperCase()}</div>
+        <button type="button" id="tg-view-cal-next" class="icon-btn small">›</button>
+      </div>
+      <div class="cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+      <div class="cal-grid">${viewCalendarGridHTML(tgDetailCalView, h, today)}</div>
+    </div>
+  `;
 }
 
 /* ---------- DETAIL / CREATE-EDIT SCREEN ---------- */
@@ -249,12 +376,6 @@ function detailScreenHTML() {
   const longest = !isNew ? longestStreakDays(h, today) : 0;
   const hasRelapses = !isNew && (h.relapses || []).length > 0;
 
-  // Detail screen has room for a denser, more calendar-like read than the
-  // card's compact strip — a 6-week (42-day) grid, 7 wide, like a
-  // compressed contribution graph.
-  const tape = !isNew ? historyTape(h, 42, today) : [];
-  const tapeHTML = tape.map((t) => `<div class="hb ${t.state}" title="${t.date}"></div>`).join("");
-
   const relapsesSorted = !isNew ? (h.relapses || []).slice().sort((a, b) => b.date.localeCompare(a.date)) : [];
   const relapseListHTML = relapsesSorted.map((r) => {
     const expanded = expandedRelapseId === r.id;
@@ -286,7 +407,6 @@ function detailScreenHTML() {
         <div class="readout-divider"></div>
         <div class="readout-block"><div class="readout-label">TARGET</div><div class="readout-sub">${h.targetDays} DAYS</div><div class="hint-text" style="margin-top:4px;">BEST: ${longest}D</div></div>
       </div>
-      <div class="tg-heatmap">${tapeHTML}</div>
     </div>`;
 
   return `
@@ -334,10 +454,28 @@ function screenHeaderHTML(title) {
 
 /* ---------- HANDLERS ---------- */
 function attachHandlers() {
-  if (screen === "detail") { attachDetailHandlers(); return; }
-  document.querySelectorAll("[data-open-habit]").forEach((b) => b.onclick = () => openDetail(b.getAttribute("data-open-habit")));
+  if (screen === "edit") { attachDetailHandlers(); return; }
+  if (screen === "view") { attachViewHandlers(); return; }
+  document.querySelectorAll("[data-open-habit]").forEach((b) => b.onclick = () => openView(b.getAttribute("data-open-habit")));
+  document.querySelectorAll("[data-edit-habit]").forEach((b) => b.onclick = () => openEdit(b.getAttribute("data-edit-habit")));
   const newBtn = el("btn-tg-new");
   if (newBtn) newBtn.onclick = () => openPresetSheet();
+}
+
+function attachViewHandlers() {
+  const h = currentHabit();
+  if (!h) return;
+
+  const closeBtn = el("btn-tg-view-close");
+  if (closeBtn) closeBtn.onclick = () => { screen = null; editingId = null; draft = null; render(); };
+
+  const editBtn = el("btn-tg-view-edit");
+  if (editBtn) editBtn.onclick = () => openEdit(h.id);
+
+  const calPrev = el("tg-view-cal-prev");
+  if (calPrev) calPrev.onclick = () => { tgDetailCalView.setMonth(tgDetailCalView.getMonth() - 1); render(); };
+  const calNext = el("tg-view-cal-next");
+  if (calNext) calNext.onclick = () => { tgDetailCalView.setMonth(tgDetailCalView.getMonth() + 1); render(); };
 }
 
 function attachDetailHandlers() {
@@ -404,12 +542,19 @@ function flashInvalid(input) {
   setTimeout(() => { input.style.borderColor = ""; }, 900);
 }
 
-function openDetail(habitId) {
+function openView(habitId) {
+  editingId = habitId; draft = null;
+  tgDetailCalView = new Date();
+  screen = "view";
+  render();
+}
+
+function openEdit(habitId) {
   editingId = habitId; draft = null;
   const h = state.habits.find((x) => x.id === habitId);
   tgCalView = new Date((h ? h.startDate : todayStr()) + "T12:00:00");
   expandedRelapseId = null;
-  screen = "detail";
+  screen = "edit";
   render();
 }
 
@@ -422,7 +567,7 @@ function startDraft(name) {
   editingId = null;
   draft = { name: name || "", reason: "", targetDays: 90, startDate: todayStr() };
   tgCalView = new Date();
-  screen = "detail";
+  screen = "edit";
   render();
 }
 document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => startDraft(b.getAttribute("data-preset"))));
