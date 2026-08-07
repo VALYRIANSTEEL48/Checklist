@@ -334,6 +334,15 @@ ul{ list-style:none; margin:0; padding:0; }
 .sc-stat-sep{ color:var(--text-dim); font-weight:400; margin:0 1px; }
 .sc-stat-text{ font-size:15px; letter-spacing:.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
 .sc-sub{ font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--text-dim); margin-top:5px; }
+.sitrep-cell-wide{ grid-column:1 / -1; }
+
+.dash-header-right{ display:flex; align-items:center; gap:8px; }
+.dash-power-chip{
+  display:flex; align-items:center; gap:5px; background:var(--panel); border:1px solid var(--border);
+  border-radius:20px; padding:6px 12px; font-family:var(--font-mono); font-size:11px; font-weight:700;
+  letter-spacing:.5px; color:var(--accent);
+}
+.dash-power-sep{ color:var(--text-dim); }
 
 /* shared top strip used inside sub-views */
 .top-strip{ display:flex; align-items:center; gap:10px; padding:16px 16px 6px; }
@@ -542,6 +551,7 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .status-badge.draft{ background:var(--panel-alt); color:var(--text-dim); border:1px solid var(--border); }
 .status-badge.active{ background:var(--success); color:#0B0E0C; }
 .status-badge.complete{ background:var(--accent); color:#0B0E0C; }
+.status-badge.primary{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); margin-left:6px; }
 
 /* builder: basics + phases */
 .builder-section-title{ font-size:10px; letter-spacing:2px; color:var(--text-dim); margin:22px 0 10px; }
@@ -676,7 +686,13 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 
 .habit-card{ display:block; width:100%; text-align:left; background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; }
 .habit-card.terminated{ border-left-color:var(--success); }
-.hc-top{ display:flex; justify-content:space-between; align-items:center; }
+/* Streak-header identity (Checklist), not project-card identity
+   (Assignments) — the streak count is the single most important thing
+   on this card, so it gets readout-value-scale treatment. */
+.hc-hero{ display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+.hc-streak-big{ font-family:var(--font-mono); font-size:42px; font-weight:700; color:var(--accent); line-height:1; flex-shrink:0; }
+.habit-card.terminated .hc-streak-big{ color:var(--success); }
+.hc-hero-body{ min-width:0; }
 .hc-name{ font-size:14px; font-weight:600; }
 .hc-streak{ font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--accent); }
 .habit-card.terminated .hc-streak{ color:var(--success); }
@@ -684,6 +700,15 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .hc-target-track{ height:3px; background:var(--panel-alt); border-radius:2px; overflow:hidden; margin-top:10px; }
 .hc-target-fill{ height:100%; background:var(--accent); }
 .habit-card.terminated .hc-target-fill{ background:var(--success); }
+
+/* Detail screen's denser, month-grid-shaped read (vs. the card's
+   compact single-row strip in .tg-history-tape above it in the cascade). */
+.tg-heatmap{ display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; margin-top:12px; }
+.tg-heatmap .hb{ aspect-ratio:1; border-radius:1px; background:var(--panel-alt); }
+.tg-heatmap .hb.clean{ background:var(--success); }
+.tg-heatmap .hb.relapse{ background:var(--danger); }
+.tg-heatmap .hb.before-start{ background:transparent; border:1px dashed var(--border); }
+.tg-heatmap .hb.future{ background:transparent; }
 
 .tg-history-tape{ display:flex; gap:2px; margin-top:12px; }
 .tg-history-tape .hb{ flex:1; height:20px; border-radius:1px; background:var(--panel-alt); }
@@ -708,3 +733,21 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .tg-status-badge{ display:inline-block; font-size:9px; letter-spacing:1px; font-weight:700; padding:3px 8px; border-radius:2px; margin-bottom:14px; }
 .tg-status-badge.active{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); }
 .tg-status-badge.terminated{ background:var(--success); color:#0B0E0C; }
+
+/* ===== WINS — category-colored left edge, same visual language as
+   .assignment-card.overdue / .habit-card.terminated (colored left
+   border = at-a-glance classification), applied to the generic
+   .wk-history-row shape reused from Workouts' History tab. ===== */
+.win-card.cat-money{ border-left:3px solid var(--accent); }
+.win-card.cat-fitness{ border-left:3px solid var(--success); }
+.win-card.cat-general{ border-left:3px solid var(--border); }
+
+/* ===== GAMIFICATION — rank-name settings grid + rank-up celebration ===== */
+.rank-name-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+.rank-name-grid .text-input{ margin:0; }
+
+.rankup-modal{ text-align:center; }
+.rankup-icon{ color:var(--accent); display:flex; justify-content:center; margin-bottom:10px; }
+.rankup-label{ font-size:11px; letter-spacing:3px; color:var(--text-dim); font-weight:700; }
+.rankup-level{ font-family:var(--font-mono); font-size:44px; font-weight:700; color:var(--accent); line-height:1.2; }
+.rankup-rank{ font-size:15px; letter-spacing:2px; font-weight:700; }

@@ -82,6 +82,28 @@ function longestStreakDays(habit, today) {
   });
   return Math.max(longest, currentStreakDays(habit, today));
 }
+// Total days-ever a habit has been "clean" — current streak plus every
+// historical clean segment between relapses. Used by gamification.js's
+// +3/clean-day point source. Deliberately mirrors longestStreakDays'
+// anchor-walk exactly (same segment-length math via daysBetween) rather
+// than counting calendar days one by one, so it agrees with
+// currentStreakDays/longestStreakDays' counting convention — for a habit
+// with zero relapses this equals currentStreakDays exactly, not
+// currentStreakDays+1 from also counting the start day itself.
+function totalCleanDaysEver(habit, today) {
+  today = today || todayStr();
+  const dates = sortedRelapseDates(habit);
+  let total = 0;
+  let anchor = habit.startDate;
+  dates.forEach((relapseDate) => {
+    if (relapseDate < anchor) return;
+    total += daysBetween(anchor, relapseDate);
+    anchor = relapseDate;
+  });
+  total += Math.max(0, daysBetween(anchor, today));
+  return total;
+}
+
 function historyTape(habit, days, today) {
   today = today || todayStr();
   const relapseDateSet = new Set(sortedRelapseDates(habit));
@@ -166,16 +188,26 @@ function listScreenHTML() {
       <div class="tg-readout-block"><div class="readout-label">TERMINATED</div><div class="readout-value" style="font-size:26px;">${pad2(terminated.length)}</div></div>
     </div>`;
 
+  // Pulls Targets' visual identity toward Checklist's streak header (big
+  // dominant number) instead of Assignments' project-card look — the
+  // streak count is the single most important thing on this card, so it
+  // gets readout-value-scale treatment, with a compact history strip
+  // underneath reading as "here's your actual history" rather than a
+  // percentage bar.
   const cardHTML = (h) => {
     const streak = currentStreakDays(h, today);
     const term = isTerminated(h, today);
-    const pct = h.targetDays ? Math.min(100, Math.round((streak / h.targetDays) * 100)) : 0;
+    const tape = historyTape(h, 14, today);
+    const tapeHTML = tape.map((t) => `<div class="hb ${t.state}" title="${t.date}"></div>`).join("");
     return `<button class="habit-card ${term ? "terminated" : ""}" data-open-habit="${h.id}">
-      <div class="hc-top">
-        <div><div class="hc-name">${escapeHTML(h.name)}</div><div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"}</div></div>
-        <div class="hc-streak">${streak}</div>
+      <div class="hc-hero">
+        <div class="hc-streak-big">${streak}</div>
+        <div class="hc-hero-body">
+          <div class="hc-name">${escapeHTML(h.name)}</div>
+          <div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"}</div>
+        </div>
       </div>
-      <div class="hc-target-track"><div class="hc-target-fill" style="width:${pct}%"></div></div>
+      <div class="tg-history-tape">${tapeHTML}</div>
     </button>`;
   };
 
@@ -217,7 +249,10 @@ function detailScreenHTML() {
   const longest = !isNew ? longestStreakDays(h, today) : 0;
   const hasRelapses = !isNew && (h.relapses || []).length > 0;
 
-  const tape = !isNew ? historyTape(h, 30, today) : [];
+  // Detail screen has room for a denser, more calendar-like read than the
+  // card's compact strip — a 6-week (42-day) grid, 7 wide, like a
+  // compressed contribution graph.
+  const tape = !isNew ? historyTape(h, 42, today) : [];
   const tapeHTML = tape.map((t) => `<div class="hb ${t.state}" title="${t.date}"></div>`).join("");
 
   const relapsesSorted = !isNew ? (h.relapses || []).slice().sort((a, b) => b.date.localeCompare(a.date)) : [];
@@ -251,7 +286,7 @@ function detailScreenHTML() {
         <div class="readout-divider"></div>
         <div class="readout-block"><div class="readout-label">TARGET</div><div class="readout-sub">${h.targetDays} DAYS</div><div class="hint-text" style="margin-top:4px;">BEST: ${longest}D</div></div>
       </div>
-      <div class="tg-history-tape">${tapeHTML}</div>
+      <div class="tg-heatmap">${tapeHTML}</div>
     </div>`;
 
   return `
@@ -471,7 +506,15 @@ window.TargetsData = {
   populateSettings: () => {},
   trackedCount: () => state.habits.length,
   bestStreak: () => state.habits.reduce((max, h) => Math.max(max, currentStreakDays(h, todayStr())), 0),
-  goHome: () => { screen = null; editingId = null; draft = null; render(); }
+  goHome: () => { screen = null; editingId = null; draft = null; render(); },
+  // Both for gamification.js's point calculation — pure reads over the
+  // existing engine functions, nothing new stored.
+  totalCleanDaysAcrossHabits: () => state.habits.reduce((sum, h) => sum + totalCleanDaysEver(h, todayStr()), 0),
+  // "Reached its goal" is based on longest-ever streak, not current — a
+  // habit that terminated and later relapsed keeps having earned this,
+  // one-time, per the design (award once per habit, not once per day
+  // it stays terminated).
+  terminatedCount: () => state.habits.filter((h) => longestStreakDays(h, todayStr()) >= h.targetDays).length
 };
 
 /* ---------- INIT ---------- */

@@ -8,7 +8,7 @@
 "use strict";
 
 const el = (id) => document.getElementById(id);
-const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments", "view-targets"];
+const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments", "view-targets", "view-missions", "view-wins", "view-profile"];
 
 function showView(id) {
   VIEWS.forEach((v) => { el(v).hidden = v !== id; });
@@ -44,6 +44,32 @@ function refreshDashboard() {
   if (window.TargetsData) {
     el("dash-targets-stat").textContent = window.TargetsData.bestStreak();
     el("dash-targets-sub").textContent = window.TargetsData.trackedCount() + " TRACKED";
+  }
+  if (window.MissionsData) {
+    const primary = window.MissionsData.getPrimaryMission();
+    el("dash-missions-stat").textContent = primary ? primary.title : "NO MISSIONS";
+    if (primary) {
+      const total = (primary.milestones || []).length;
+      const done = (primary.milestones || []).filter((x) => x.done).length;
+      el("dash-missions-sub").textContent = total ? done + "/" + total + " MILESTONES" : "PRIMARY";
+    } else {
+      el("dash-missions-sub").textContent = "NO PRIMARY";
+    }
+  }
+  if (window.WinsData) {
+    const ws = window.WinsData.getState();
+    el("dash-wins-stat").textContent = ws.wins.length;
+    const counts = window.WinsData.countByCategory();
+    el("dash-wins-sub").textContent = counts.money + "M · " + counts.fitness + "F · " + counts.general + "G";
+  }
+  if (window.GamificationData) {
+    const level = window.GamificationData.level();
+    const rank = window.GamificationData.rankName();
+    const points = window.GamificationData.totalPoints();
+    el("dash-profile-stat").textContent = "LV." + level + " · " + rank;
+    el("dash-profile-sub").textContent = points + " PTS";
+    el("dash-power-level").textContent = "LV." + level;
+    el("dash-power-rank").textContent = rank;
   }
   updatePriority();
 }
@@ -163,7 +189,29 @@ function fetchWeather() {
 window.goToDashboard = function () {
   showView("view-dashboard");
   refreshDashboard();
+  checkRankUp();
 };
+
+/* ---------- GAMIFICATION: rank-up celebration ----------
+   Checked on load and every time the dashboard is returned to (cheap —
+   checkForLevelUp() only reports leveledUp:true the first time a
+   threshold is crossed, then persists that checkpoint, so re-checking
+   here on every dashboard visit is safe and doesn't re-trigger). */
+function checkRankUp() {
+  if (!window.GamificationData) return;
+  try {
+    const result = window.GamificationData.checkForLevelUp();
+    if (result.leveledUp) showRankUp(result.newLevel, result.newRank);
+  } catch (err) {
+    console.error("Rank-up check failed:", err);
+  }
+}
+function showRankUp(level, rank) {
+  el("rankup-level").textContent = "LV." + level;
+  el("rankup-rank").textContent = rank;
+  el("rankup-overlay").classList.add("open");
+}
+el("btn-rankup-dismiss").addEventListener("click", () => el("rankup-overlay").classList.remove("open"));
 
 function openChecklist() { showView("view-checklist"); }
 function openWorkout() {
@@ -193,11 +241,41 @@ function openTargets() {
     console.error("Failed to open Targets:", err);
   }
 }
+function openMissions() {
+  showView("view-missions");
+  try {
+    if (window.MissionsData) window.MissionsData.goHome();
+  } catch (err) {
+    console.error("Failed to open Missions:", err);
+  }
+}
+function openWins() {
+  showView("view-wins");
+  try {
+    if (window.WinsData) window.WinsData.goHome();
+  } catch (err) {
+    console.error("Failed to open Wins:", err);
+  }
+}
+function openProfile() {
+  showView("view-profile");
+  try {
+    if (window.ProfileData) window.ProfileData.goHome();
+  } catch (err) {
+    console.error("Failed to open Profile:", err);
+  }
+}
+// Profile's recent-wins rows link into the Wins module itself.
+window.openWinsFromProfile = openWins;
 
 el("tile-checklist").addEventListener("click", openChecklist);
 el("tile-workout").addEventListener("click", openWorkout);
 el("tile-assignments").addEventListener("click", openAssignments);
 el("tile-targets").addEventListener("click", openTargets);
+el("tile-missions").addEventListener("click", openMissions);
+el("tile-wins").addEventListener("click", openWins);
+el("tile-profile").addEventListener("click", openProfile);
+el("dash-power-chip").addEventListener("click", openProfile);
 
 /* ---------- MERGED SETTINGS SHEET ---------- */
 window.openMergedSettings = function () {
@@ -205,6 +283,9 @@ window.openMergedSettings = function () {
   if (window.WorkoutData) window.WorkoutData.populateSettings();
   if (window.AssignmentsData) window.AssignmentsData.populateSettings();
   if (window.TargetsData) window.TargetsData.populateSettings();
+  if (window.MissionsData) window.MissionsData.populateSettings();
+  if (window.WinsData) window.WinsData.populateSettings();
+  if (window.GamificationData) window.GamificationData.populateSettings();
   el("settings-overlay").classList.add("open");
 };
 el("btn-dash-settings").addEventListener("click", window.openMergedSettings);
@@ -227,7 +308,10 @@ el("btn-export").addEventListener("click", () => {
     checklist: window.ChecklistData ? window.ChecklistData.getState() : null,
     workout: window.WorkoutData ? window.WorkoutData.getState() : null,
     assignments: window.AssignmentsData ? window.AssignmentsData.getState() : null,
-    targets: window.TargetsData ? window.TargetsData.getState() : null
+    targets: window.TargetsData ? window.TargetsData.getState() : null,
+    missions: window.MissionsData ? window.MissionsData.getState() : null,
+    wins: window.WinsData ? window.WinsData.getState() : null,
+    gamification: window.GamificationData ? window.GamificationData.getState() : null
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -252,6 +336,9 @@ el("file-import").addEventListener("change", (e) => {
         if (parsed.workout && window.WorkoutData) window.WorkoutData.setState(parsed.workout);
         if (parsed.assignments && window.AssignmentsData) window.AssignmentsData.setState(parsed.assignments);
         if (parsed.targets && window.TargetsData) window.TargetsData.setState(parsed.targets);
+        if (parsed.missions && window.MissionsData) window.MissionsData.setState(parsed.missions);
+        if (parsed.wins && window.WinsData) window.WinsData.setState(parsed.wins);
+        if (parsed.gamification && window.GamificationData) window.GamificationData.setState(parsed.gamification);
       } else if (parsed.tasks && parsed.settings) {
         // legacy checklist-only backup (pre-merge)
         if (window.ChecklistData) window.ChecklistData.setState(parsed);
@@ -270,11 +357,14 @@ el("file-import").addEventListener("change", (e) => {
 });
 
 el("btn-reset-all").addEventListener("click", () => {
-  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, assignments, and targets? This cannot be undone.")) {
+  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, assignments, targets, missions, wins, and your power level? This cannot be undone.")) {
     if (window.ChecklistData) window.ChecklistData.wipe();
     if (window.WorkoutData) window.WorkoutData.wipe();
     if (window.AssignmentsData) window.AssignmentsData.wipe();
     if (window.TargetsData) window.TargetsData.wipe();
+    if (window.MissionsData) window.MissionsData.wipe();
+    if (window.WinsData) window.WinsData.wipe();
+    if (window.GamificationData) window.GamificationData.wipe();
     el("settings-overlay").classList.remove("open");
     refreshDashboard();
     window.showToast("ALL DATA WIPED");
@@ -287,6 +377,7 @@ updateClock();
 loadCachedWeather();
 fetchWeather();
 refreshDashboard();
+checkRankUp();
 setInterval(updateClock, 15000);
 setInterval(refreshDashboard, 30000);
 setInterval(fetchWeather, 15 * 60 * 1000);

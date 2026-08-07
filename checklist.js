@@ -777,6 +777,12 @@ window.ChecklistData = {
   },
   populateSettings: populateSettingsFields,
   mainStreak: () => computeMainStreak(),
+  // Exposed for gamification.js: the day-completion check already used
+  // internally by the streak walk. Deliberate exception to "date-math
+  // helpers are duplicated per module" — this is substantial derivation
+  // logic, not a small utility, so it gets one source of truth instead
+  // of being re-implemented.
+  isDayComplete,
   // Dashboard SITREP summary: today's due/done counts and the next
   // not-yet-done scheduled task (by time, falling back to the first
   // remaining task of any kind). Resolved on demand, nothing stored.

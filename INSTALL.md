@@ -8,9 +8,11 @@ your phone — icon in the app drawer, opens full-screen, works with no
 signal. All data is stored only on your phone; nothing is sent anywhere.
 
 As of this version, the app is a single **Command dashboard** — a SITREP-style
-home screen — with four modules — **Checklist**, **Workouts**,
-**Assignments**, and **Targets** — each with its own data, plus one shared
-Settings sheet.
+home screen — with seven modules — **Checklist**, **Workouts**,
+**Assignments**, **Targets**, **Missions**, **Wins**, and **Profile** — each
+with its own data, plus one shared Settings sheet. A **Power Level** system
+runs quietly underneath all of them, turning what you're already doing into
+points, levels, and ranks.
 
 ## Step 1 — Put the files somewhere your phone can reach over HTTPS
 
@@ -69,8 +71,10 @@ tiles: a live clock/date (and local weather, if you grant location
 permission — this is optional and the chip just stays hidden if you don't),
 a "NEXT UP" line surfacing the single most urgent thing across every module
 (an overdue assignment, the next scheduled task, today's program session,
-etc.), and a 2×2 status board with one glanceable stat per module. Tap any
-quadrant to enter that module, tap the back arrow in its header to return.
+etc.), and a status board with one glanceable stat per module. Tap any
+tile to enter that module, tap the back arrow in its header to return. Your
+Power Level/Rank chip sits next to the settings gear — tap it to jump
+straight to Profile.
 
 **Checklist**
 - Tap **+** to add a task. Choose **repeating** or **one-off**, and
@@ -131,11 +135,11 @@ interval days mixed in), not just quick ad-hoc sessions:
   that RPE for those reps (autoregulation), same as most RPE-based
   programs work.
 
-**Settings** (gear icon, reachable from the dashboard or either module)
-covers both apps in one place: checklist reset time, workout weekly
-target, accent color, panel tone, night mode, and export/import/wipe —
-which now back up and restore **both** datasets together in one JSON file
-(including all programs).
+**Settings** (gear icon, reachable from the dashboard or any module) covers
+every module in one place: checklist reset time, workout weekly target,
+accent color, panel tone, night mode, your nine rank names, and
+export/import/wipe — which back up and restore **all seven modules'** data
+together in one JSON file (including workout programs).
 
 **Panel tone** — six options: Shadow (the original near-black default),
 Blackout (true neutral black/grey), Gunmetal, Olive Drab, Desert, and
@@ -184,9 +188,13 @@ runs in the background off the calendar.
 - **+ Add Target** offers four quick presets (Pornography, Weed, Smoking,
   Alcohol) or a custom one — name, a reason for wanting it gone, and a
   target day count (90 by default, adjustable any time via the stepper).
-- The big streak readout and 30-day history strip reuse the same
-  components as the checklist's main streak header — green for clean
-  days, red for a relapse.
+- Card list view now leads with a big streak number — the single most
+  important thing on the card — next to a compact 14-day history strip,
+  pulling Targets' identity toward the checklist's streak header instead
+  of looking like an Assignments card wearing a different label.
+- The detail screen's readout has a denser 6-week (42-day) heatmap-style
+  grid instead of a single strip — a compressed contribution graph, easier
+  to read as "here's your actual history" than a percentage.
 - **"Terminated" isn't a locked state** — it's simply what shows once
   your current unbroken streak reaches the target. There's no separate
   status to manage; it's computed live from your start date and relapse
@@ -201,6 +209,43 @@ runs in the background off the calendar.
   exists.
 - Relapse history is kept per target, tap any entry to expand the full
   notes.
+
+**Missions** — long-horizon goals, months to years, not days to weeks like
+Assignments. Deliberately kept separate from Assignments — a Mission's steps
+are its own private milestone list, not linked to any Assignment.
+- Each Mission has a title, a **vision** (the "why" — a motivating
+  statement, longer-form than an Assignment's description), an optional
+  soft target date, and a milestone checklist (same add/check/remove
+  component Assignments' subtasks use).
+- Exactly one Mission can be flagged **Primary** at a time — setting a new
+  one automatically clears the old flag. Your Primary Mission is the hero
+  element on the Profile page.
+
+**Wins** — a private wins channel: money, fitness, or general victories,
+logged with an optional dollar amount and note. Meant to be a pleasant
+thing to scroll back through, not just a table — grouped by month like
+Workouts' History tab, with a category-colored left edge on each entry.
+The dollar amount is for your own tracking only; it doesn't scale the
+points a win is worth (see Power Level below) — that's deliberate, so
+there's no incentive to inflate the number.
+
+**Profile** — a read-only page, the dashboard's bigger sibling. Nothing
+here is stored on its own; it reads live from every other module and
+computes everything fresh. Shows your Power Level and Rank (hero block),
+your Primary Mission's progress, your best lifts auto-detected from
+Workouts history (max weight + estimated 1RM via the Epley formula),
+strength/aerobic trend direction, a streak overview across Checklist and
+Targets, and a Wins summary.
+
+**Power Level** — a small chip near the dashboard header (tap it to open
+Profile) tracks your overall level and rank. Nothing is logged as a
+point-earning event — the total is recalculated fresh each time from
+what's already in your other modules (checklist streak days, workouts
+logged, weekly targets hit, clean days across Targets, completed
+Assignments/Missions, logged Wins, and days you opened the app), so
+there's no separate ledger that can drift out of sync. Crossing a level
+threshold pops a celebration screen once. Rank names (RECRUIT, PRIVATE,
+etc.) are placeholders — rename all nine tiers yourself in Settings.
 
 
 ## A few things worth knowing
