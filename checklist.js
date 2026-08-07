@@ -614,6 +614,15 @@ function armDrag(e, handle) {
   const li = handle.closest("li.task-item");
   const list = li ? li.closest("[data-group-list]") : null;
   if (!li || !list) return;
+  // Without this, holding the pointer still for 750ms (waiting to see if
+  // it's a long-press-to-drag) looks to the browser exactly like the
+  // start of its own native gesture — text selection (desktop click-hold,
+  // or Chrome's long-press-to-select on touch) or the iOS/Android
+  // callout menu — and since the browser's own long-press timer is
+  // typically shorter than ours, it was winning that race outright.
+  // preventDefault here, plus user-select:none/-webkit-touch-callout:none
+  // on .drag-handle in CSS, suppress both.
+  e.preventDefault();
   const pointerId = e.pointerId;
   const startX = e.clientX, startY = e.clientY;
   pendingDrag = {

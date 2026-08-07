@@ -171,8 +171,17 @@ ul{ list-style:none; margin:0; padding:0; }
 .task-meta{ display:flex; gap:8px; margin-top:3px; font-family:var(--font-mono); font-size:11px; color:var(--text-dim); flex-wrap:wrap; }
 .task-meta .streak-tag{ color:var(--accent); }
 
-.drag-handle{ color:var(--text-dim); padding:4px; touch-action:none; flex-shrink:0; }
-.drag-handle svg{ display:block; }
+/* user-select:none + -webkit-touch-callout:none stop the browser's own
+   long-press gesture (text selection on desktop/Chrome touch, the
+   iOS/Android callout menu) from competing with — and winning — the
+   750ms hold-to-drag timer in checklist.js. touch-action:none additionally
+   keeps the browser from treating a hold-then-move here as a scroll. */
+.drag-handle{
+  color:var(--text-dim); padding:4px; touch-action:none; flex-shrink:0;
+  -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none;
+  -webkit-touch-callout:none;
+}
+.drag-handle svg{ display:block; pointer-events:none; }
 
 /* ===== CUSTOM TASK GROUPS ===== */
 .task-group-block{
@@ -423,6 +432,13 @@ ul{ list-style:none; margin:0; padding:0; }
   background:var(--panel); border:1px solid var(--border); padding:12px 16px;
   border-radius:var(--radius); margin-bottom:10px;
 }
+/* The block only shrink-wraps to its widest child (time or date,
+   whichever is longer) — text-align:center on the block itself is what
+   actually centers the shorter line under/over the wider one. Left
+   alignment (the block-level default) was lining both up on their left
+   edge instead, which reads as off-center whenever the two strings
+   aren't the same rendered width. */
+.sitrep-time-block{ text-align:center; }
 .sitrep-time{ font-family:var(--font-mono); font-size:38px; font-weight:700; color:var(--text); line-height:1; letter-spacing:1px; }
 .sitrep-date{ font-family:var(--font-mono); font-size:11px; letter-spacing:2px; color:var(--text-dim); margin-top:5px; }
 .sitrep-weather{ display:flex; align-items:center; gap:8px; color:var(--text); flex-shrink:0; padding-left:16px; border-left:1px solid var(--border); }
