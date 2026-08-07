@@ -160,6 +160,17 @@
   </header>
 
   <main id="checklist-main">
+    <!-- Quick-add bar: a one-time, unscheduled task by default — a fast way
+         to capture something without opening the full task sheet. Fine-tune
+         (recurrence, schedule, etc.) afterward via the task's own settings.
+         Inline at the top so it's the first thing above any group/task. -->
+    <div class="quick-task-bar" id="quick-task-bar">
+      <input type="text" id="input-quick-task" class="quick-task-input" placeholder="New task" maxlength="60" autocomplete="off">
+      <button id="btn-quick-task-add" class="quick-task-add-btn" aria-label="Add task">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+      </button>
+    </div>
+
     <div id="checklist-groups"></div>
     <p class="empty-note" id="checklist-empty">NO TASKS YET</p>
 
@@ -173,18 +184,6 @@
       <ul class="task-list" id="list-paused"></ul>
     </section>
   </main>
-
-</div>
-
-<!-- Quick-add bar: a one-time, unscheduled task by default — a fast way
-     to capture something without opening the full task sheet. Fine-tune
-     (recurrence, schedule, etc.) afterward via the task's own settings. -->
-<div class="quick-task-bar" id="quick-task-bar">
-  <input type="text" id="input-quick-task" class="quick-task-input" placeholder="New task" maxlength="60" autocomplete="off">
-  <button id="btn-quick-task-add" class="quick-task-add-btn" aria-label="Add task">
-    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
-  </button>
-</div>
 
 </div>
 </div>
