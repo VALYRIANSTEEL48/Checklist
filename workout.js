@@ -277,12 +277,12 @@ function buildLoggable(name, fields, values, opts) {
   const out = {
     id: opts.id || uid(), name, note: "", fields: sortFields(fields),
     distanceUnit: values.distanceUnit || "mi", ampap: !!opts.ampap, hasSets,
-    targets: opts.targets || null
+    targets: opts.targets || null, roundDone: false
   };
   if (hasSets) {
     const setCount = Math.max(1, Number(values.sets) || 1);
     out.sets = Array.from({ length: setCount }, () => {
-      const row = {};
+      const row = { done: false };
       perSetKeys.forEach((k) => { row[k] = (k === "reps" && opts.ampap) ? "" : (values[k] != null ? String(values[k]) : ""); });
       return row;
     });
@@ -384,7 +384,7 @@ function escapeHTML(s) {
 }
 
 /* ---------- RUNTIME (non-persisted) STATE ---------- */
-let screen = null;          // null | 'templates' | 'variants' | 'preview' | 'active' | 'builder' | 'program-builder'
+let screen = null;          // null | 'templates' | 'variants' | 'readiness' | 'preview' | 'active' | 'builder' | 'program-builder'
 let tab = "home";           // 'home' | 'history' | 'manage'
 let pendingSwipeAnim = null; // 'left' | 'right' | null — set by a swipe gesture, consumed by the next render
 let selectedTemplate = null;
@@ -395,6 +395,11 @@ let builder = null;         // { name, icon, variants, activeVar }
 let selectedMonthKey = null;
 let selectedHistoryId = null;
 let noteExIdx = null;
+let activeExIdx = 0;          // which exercise page is showing on the active screen; === activeWorkout.exercises.length means the trailing review/notes page
+let pendingActiveWorkout = null; // a workout built and ready to start, waiting on the readiness screen before it actually begins (gets startTime/readiness/notes added then)
+let pendingWorkoutOrigin = null; // 'preview' | 'home' — where the readiness screen's back button returns to
+let readiness = null;         // { sleep, soreness, energy } — working copy while the readiness screen is open
+let selectedWeekDay = null;   // date string, or null — which day's card the home screen's "THIS WEEK" strip is showing above it (null = today/default)
 
 // Program builder runtime state
 let editingProgram = null;      // the saved Program being edited, or null if creating new
@@ -405,7 +410,7 @@ let daySheetCtx = null;         // { phaseId, dow } while the day-assign sheet i
 let slotEditorCtx = null;       // { phaseId, slotId } while the slot/block editor modal is open
 
 const el = (id) => document.getElementById(id);
-function isDrill() { return ["templates","variants","preview","active","builder","program-builder"].includes(screen); }
+function isDrill() { return ["templates","variants","readiness","preview","active","builder","program-builder"].includes(screen); }
 
 /* ---------- DERIVED DATA ---------- */
 function workoutDaysSet() { return new Set(state.history.map((w) => w.date)); }
@@ -455,6 +460,7 @@ function renderWorkout() {
   try {
     if (screen === "templates") html = templatesScreenHTML();
     else if (screen === "variants") html = variantsScreenHTML();
+    else if (screen === "readiness") html = readinessScreenHTML();
     else if (screen === "preview") html = previewScreenHTML();
     else if (screen === "active") html = activeScreenHTML();
     else if (screen === "builder") html = builderScreenHTML();
@@ -517,7 +523,11 @@ function errorScreenHTML(err) {
 }
 function attachErrorScreenHandlers() {
   const goHomeBtn = el("btn-error-go-home");
-  if (goHomeBtn) goHomeBtn.onclick = () => { screen = null; tab = "home"; renderWorkout(); };
+  if (goHomeBtn) goHomeBtn.onclick = () => {
+    screen = null; tab = "home";
+    activeExIdx = 0; pendingActiveWorkout = null; readiness = null;
+    renderWorkout();
+  };
   const deactivateBtn = el("btn-error-deactivate-program");
   if (deactivateBtn) deactivateBtn.onclick = () => {
     if (state.activeProgramId) {
@@ -527,6 +537,7 @@ function attachErrorScreenHandlers() {
       save();
     }
     screen = null; tab = "home";
+    activeExIdx = 0; pendingActiveWorkout = null; readiness = null;
     renderWorkout();
   };
 }
@@ -539,14 +550,19 @@ function homeScreenHTML() {
   const dash = (pct * 125.6).toFixed(1);
   const week = getWeekDays();
   const wdays = workoutDaysSet();
+  const todayStr = formatDate(new Date());
+  // A non-null selectedWeekDay that isn't today swaps the hero card below
+  // for that day's session instead of the usual today/program card — set
+  // by clicking a day in the THIS WEEK strip (see weekDayCardHTML).
+  const showingDay = selectedWeekDay && selectedWeekDay !== todayStr ? selectedWeekDay : null;
 
   const weekHTML = week.map((d) => `
-    <div class="wk-day">
+    <button type="button" class="wk-day" data-week-day="${d.date}">
       <span class="wk-day-name">${d.dayName}</span>
-      <div class="wk-day-dot ${wdays.has(d.date) ? "done" : d.isToday ? "today" : ""}">
+      <div class="wk-day-dot ${wdays.has(d.date) ? "done" : d.isToday ? "today" : ""} ${showingDay === d.date ? "selected" : ""}">
         ${wdays.has(d.date) ? iconSVG("check", 16) : d.dayNum}
       </div>
-    </div>`).join("");
+    </button>`).join("");
 
   const seen = new Set();
   const recent = state.history.filter((w) => {
@@ -583,7 +599,7 @@ function homeScreenHTML() {
   }).join("");
 
   const activeProgram = getActiveProgram();
-  const heroHTML = activeProgram ? programHeroHTML(activeProgram) : `
+  const heroHTML = showingDay ? weekDayCardHTML(showingDay) : activeProgram ? programHeroHTML(activeProgram) : `
     <button class="wk-target-card" id="btn-open-target">
       <div class="wk-ring-wrap">
         <svg width="52" height="52">
@@ -660,6 +676,72 @@ function programHeroHTML(program) {
   </div>`;
 }
 
+// Renders the hero card for a non-today day clicked in the THIS WEEK strip.
+// Three states, in priority order: (1) already logged that day → show
+// COMPLETE + a way to view the metrics, reusing the existing history-detail
+// modal; (2) an active program resolves a real session for that date →
+// show it as MISSED (past) or UPCOMING (future) with a BEGIN action that,
+// on confirmation, starts that exact session right now (startProgramSession
+// always stamps startTime as "now" and completeWorkout always stamps the
+// log date as "today", so "begin" here doubles as "move to today" with no
+// extra date-shifting logic needed); (3) no program and no history for that
+// day → freeform workouts have no schedule to speak of, so just offer to
+// start one now.
+function weekDayCardHTML(date) {
+  const todayStr = formatDate(new Date());
+  const isFuture = date > todayStr;
+  const dateLabel = fmtFullDate(date).toUpperCase();
+  const backLink = `<a class="ph-freeform-link" data-week-day-reset="1">← BACK TO TODAY</a>`;
+  const histEntry = state.history.find((w) => w.date === date);
+
+  if (histEntry) {
+    const dur = formatDuration(histEntry.startTime, histEntry.endTime);
+    return `<div class="program-hero corner-bracket">
+      <div class="ph-top"><span class="ph-week">${dateLabel}</span><span class="status-badge complete">COMPLETE</span></div>
+      <div class="ph-title">${escapeHTML(histEntry.templateName)}</div>
+      <div class="ph-sub">${escapeHTML(histEntry.variantName)}${dur ? " · " + dur : ""}</div>
+      <button class="wk-start-btn" style="margin-bottom:0;" data-view-day-history="${histEntry.id}">${iconSVG("check", 18)} VIEW METRICS</button>
+      ${backLink}
+    </div>`;
+  }
+
+  const program = getActiveProgram();
+  if (program) {
+    const resolved = resolveSessionForDate(program, date);
+    if (resolved.status === "session") {
+      const preview = resolved.blocks.slice(0, 4).map((b) =>
+        `<div>${escapeHTML(b.name || "Exercise")} — <b>${escapeHTML(blockSummaryText(b))}</b></div>`).join("");
+      const badge = isFuture ? `<span class="status-badge draft">UPCOMING</span>` : `<span class="status-badge" style="background:var(--danger); color:#fff;">MISSED</span>`;
+      return `<div class="program-hero corner-bracket">
+        <div class="ph-top"><span class="ph-week">${dateLabel}</span>${badge}</div>
+        <div class="ph-title">${escapeHTML(resolved.slot.name)}</div>
+        <div class="ph-exercise-preview">${preview || "<div>No exercises defined for this session.</div>"}</div>
+        <button class="wk-start-btn" style="margin-bottom:0;" data-begin-day-session="${date}">${iconSVG("plus", 18)} BEGIN — MOVE TO TODAY</button>
+        ${backLink}
+      </div>`;
+    }
+    if (resolved.status === "rest") {
+      return `<div class="program-hero corner-bracket">
+        <div class="ph-top"><span class="ph-week">${dateLabel}</span></div>
+        <div class="ph-rest"><div class="big-label">REST DAY</div></div>
+        ${backLink}
+      </div>`;
+    }
+    return `<div class="program-hero corner-bracket">
+      <div class="ph-top"><span class="ph-week">${dateLabel}</span></div>
+      <div class="ph-rest"><div class="big-label">${resolved.status === "not-started" ? "PROGRAM NOT STARTED" : "OUTSIDE PROGRAM RANGE"}</div></div>
+      ${backLink}
+    </div>`;
+  }
+
+  return `<div class="program-hero corner-bracket">
+    <div class="ph-top"><span class="ph-week">${dateLabel}</span><span class="status-badge draft">NO SESSION LOGGED</span></div>
+    <p class="hint-text" style="margin:0 0 14px;">No workout was scheduled or logged for this day.</p>
+    <button class="wk-start-btn" style="margin-bottom:0;" data-begin-day-freeform="1">${iconSVG("plus", 18)} START A WORKOUT NOW</button>
+    ${backLink}
+  </div>`;
+}
+
 function blockSummaryText(b) {
   if (b.kind === "strength") return `${b.sets ?? "?"}×${b.reps ?? "?"}${b.rpe != null ? " @ RPE " + b.rpe : ""}`;
   if (b.kind === "cardio") {
@@ -674,16 +756,16 @@ function blockSummaryText(b) {
 }
 
 function startProgramSession(program, resolved) {
-  activeWorkout = {
+  pendingActiveWorkout = {
     programId: program.id, phaseId: resolved.phase.id, weekNumber: resolved.week, weekInPhase: resolved.weekInPhase,
     slotId: resolved.slot.id,
     templateId: null, templateName: program.name, variantId: resolved.slot.id,
     variantName: `${resolved.slot.name} · Week ${resolved.week}`,
-    startTime: new Date().toISOString(),
     exercises: resolved.blocks.map(buildLoggableBlock)
   };
-  screen = "active";
-  startElapsedTimer();
+  pendingWorkoutOrigin = "home";
+  readiness = { sleep: null, soreness: null, energy: null };
+  screen = "readiness";
   renderWorkout();
 }
 
@@ -1189,6 +1271,35 @@ function variantsScreenHTML() {
     ${rows}`;
 }
 
+/* ---------- READINESS SCREEN ----------
+   A quick, non-blocking self-rating shown right before a session actually
+   starts (after BEGIN WORKOUT / BEGIN SESSION, before the clock starts
+   running). Purely informational — it rides along in history for later
+   reference (see readinessSummaryHTML) but never gates starting the
+   workout, so every metric is optional and CONTINUE is always enabled. */
+const READINESS_METRICS = [
+  { key: "sleep", label: "SLEEP QUALITY" },
+  { key: "soreness", label: "SORENESS (5 = FRESH)" },
+  { key: "energy", label: "ENERGY / MOTIVATION" }
+];
+function readinessScreenHTML() {
+  const rows = READINESS_METRICS.map((m) => {
+    const val = readiness ? readiness[m.key] : null;
+    const dots = [1,2,3,4,5].map((n) =>
+      `<button type="button" class="readiness-dot ${val === n ? "active" : ""}" data-readiness="${m.key}:${n}">${n}</button>`).join("");
+    return `<div class="readiness-row">
+      <label class="field-label" style="margin-top:0;">${m.label}</label>
+      <div class="readiness-dots">${dots}</div>
+    </div>`;
+  }).join("");
+  return `
+    ${screenHeaderHTML("READINESS CHECK", "btn-readiness-back")}
+    <p class="hint-text" style="margin-bottom:18px;">Rate how recovered you're feeling, 1 (rough) to 5 (great). Purely for your own tracking — nothing here blocks the workout.</p>
+    ${rows}
+    <button class="wk-start-btn" id="btn-readiness-continue" style="margin-top:8px;">${iconSVG("plus", 18)} BEGIN WORKOUT</button>
+  `;
+}
+
 /* ---------- PREVIEW SCREEN ----------
    Read-only look at a saved variant before starting it: what's actually
    in the workout (sets/reps/weight/AMRAP), nothing editable. The pen
@@ -1308,12 +1419,13 @@ function exerciseCardHTML(ex, exIdx) {
   let body = "";
   if (ex.hasSets) {
     const perSetKeys = sortFields(fields).filter((k) => PER_SET_CAPABLE.includes(k));
-    const cols = `28px ${perSetKeys.map(() => "1fr").join(" ")} 26px 22px`;
+    const cols = `22px 28px ${perSetKeys.map(() => "1fr").join(" ")} 26px 22px`;
     const restSeconds = Number(ex.log.restBetweenSets) || 90;
     body = `
-      <div class="wk-set-header" style="grid-template-columns:${cols};"><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div><div></div></div>
+      <div class="wk-set-header" style="grid-template-columns:${cols};"><div></div><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div><div></div></div>
       ${ex.sets.map((s, setIdx) => `
         <div class="wk-set-row" style="grid-template-columns:${cols};">
+          <button type="button" class="wk-set-done-circle ${s.done ? "done" : ""}" data-set-done="${exIdx}:${setIdx}" aria-label="Mark set complete">${s.done ? iconSVG("check", 12) : ""}</button>
           <div class="set-num">${setIdx + 1}</div>
           ${perSetKeys.map((k) => `<input type="number" class="wk-set-input" inputmode="decimal" placeholder="${ex.ampap && k === "reps" ? "reps" : ""}" value="${s[k] != null ? s[k] : ""}" data-set-field="${exIdx}:${setIdx}:${k}">`).join("")}
           <button type="button" class="wk-set-rest-btn" data-set-rest="${exIdx}:${restSeconds}" aria-label="Start rest timer">${iconSVG("timer", 15)}</button>
@@ -1326,6 +1438,15 @@ function exerciseCardHTML(ex, exIdx) {
     const rtBtn = (ex.hasSets && ex.log.restBetweenSets)
       ? `<button type="button" class="rest-timer-btn" data-rest-timer="${exIdx}">${iconSVG("timer", 14)} START REST (${ex.log.restBetweenSets}s)</button>`
       : "";
+    // Sets get a per-row circle above; an exercise with no sets (a single
+    // logged round/activity — cardio, an interval block, etc.) gets one
+    // circle for the whole thing instead.
+    const roundDoneToggle = !ex.hasSets
+      ? `<button type="button" class="wk-round-done-toggle ${ex.roundDone ? "done" : ""}" data-round-done="${exIdx}">
+          <span class="wk-set-done-circle ${ex.roundDone ? "done" : ""}">${ex.roundDone ? iconSVG("check", 12) : ""}</span>
+          MARK COMPLETE
+        </button>`
+      : "";
     body += `<div class="${ex.hasSets ? "single-fields-block" : ""}">
       ${singleKeys.map((k) => {
         const meta = FIELD_LOG_META[k] || { label: k.toUpperCase(), type: "number" };
@@ -1334,6 +1455,7 @@ function exerciseCardHTML(ex, exIdx) {
           <input type="number" class="wk-set-input" inputmode="${meta.inputmode || "decimal"}" ${meta.step ? `step="${meta.step}"` : ""} value="${ex.log[k]}" data-log-field="${exIdx}:${k}">`;
       }).join("")}
       ${rtBtn}
+      ${roundDoneToggle}
     </div>`;
   }
   if (!fields.length) body = `<p class="hint-text">No fields on this item.</p>`;
@@ -1341,28 +1463,63 @@ function exerciseCardHTML(ex, exIdx) {
   return `<div class="wk-exercise-card">${head}${targetLine}${body}</div>`;
 }
 
+/* Each exercise gets its own full page during an active session — one
+   exercise's card at a time, navigated via swipe (see attachExerciseSwipe
+   near the bottom of the file) or the prev/next arrows in the sticky
+   bottom bar. activeExIdx === exercises.length is a trailing "page" past
+   the last exercise: session notes + COMPLETE WORKOUT, i.e. the final page
+   the user requested. */
 function activeScreenHTML() {
   if (!activeWorkout) return "";
-  const canComplete = hasCompletedSet();
-  const exercisesHTML = activeWorkout.exercises.map((ex, exIdx) => exerciseCardHTML(ex, exIdx)).join("");
+  const total = activeWorkout.exercises.length;
+  const onReview = activeExIdx >= total;
+  const pageLabel = onReview ? "REVIEW & FINISH" : `EXERCISE ${activeExIdx + 1} OF ${total}`;
 
-  return `
+  const headerHTML = `
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
       <button class="icon-btn" id="btn-active-back">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div style="flex:1; min-width:0;">
         <h1 class="screen-h1" style="margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTML(activeWorkout.templateName)}</h1>
-        <p class="hint-text" style="margin:2px 0 0;">${escapeHTML(activeWorkout.variantName)}</p>
+        <p class="hint-text" style="margin:2px 0 0;">${pageLabel}</p>
       </div>
+      ${!onReview ? `<button class="icon-btn" id="btn-active-add-exercise" aria-label="Add exercise">${iconSVG("plus", 20)}</button>` : ""}
       <div class="wk-elapsed-chip" id="wk-elapsed-time">${formatElapsedShort(activeWorkout.startTime)}</div>
     </div>
-    <div style="margin-bottom:16px;"></div>
-    ${exercisesHTML}
-    <button class="wk-dashed-card" style="width:100%; text-align:center; margin-bottom:16px;" id="btn-add-exercise">+ ADD EXERCISE</button>
+    <div style="margin-bottom:16px;"></div>`;
+
+  if (onReview) {
+    const canComplete = hasCompletedSet();
+    return `${headerHTML}
+      <div class="wk-exercise-card">
+        <label class="field-label" style="margin-top:0;">SESSION NOTES</label>
+        <textarea class="text-input" id="wk-session-notes" rows="4" placeholder="How did it feel? Anything to remember for next time...">${escapeHTML(activeWorkout.notes || "")}</textarea>
+      </div>
+      <div class="wk-sticky-complete">
+        <div class="wk-ex-pager">
+          <button class="icon-btn" id="btn-ex-prev" aria-label="Previous exercise">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button class="wk-start-btn" style="margin:0; flex:1;" id="btn-complete-workout" ${canComplete ? "" : "disabled style='opacity:.4; margin:0; flex:1;'"}>${iconSVG("check", 18)} COMPLETE WORKOUT</button>
+        </div>
+        ${canComplete ? "" : `<p class="hint-text" style="text-align:center; margin:8px 0 0;">Log at least one set to complete</p>`}
+      </div>`;
+  }
+
+  const ex = activeWorkout.exercises[activeExIdx];
+  return `${headerHTML}
+    ${exerciseCardHTML(ex, activeExIdx)}
     <div class="wk-sticky-complete">
-      <button class="wk-start-btn" id="btn-complete-workout" ${canComplete ? "" : "disabled style='opacity:.4'"}>${iconSVG("check", 18)} COMPLETE WORKOUT</button>
-      ${canComplete ? "" : `<p class="hint-text" style="text-align:center;">Log at least one set to complete</p>`}
+      <div class="wk-ex-pager">
+        <button class="icon-btn" id="btn-ex-prev" ${activeExIdx === 0 ? "disabled style='opacity:.3'" : ""} aria-label="Previous exercise">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="wk-ex-pager-label">${activeExIdx + 1} / ${total}</span>
+        <button class="icon-btn" id="btn-ex-next" aria-label="Next exercise">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </div>
     </div>`;
 }
 
@@ -1570,6 +1727,34 @@ function attachScreenHandlers() {
     if (resolved.status === "session") startProgramSession(program, resolved);
   };
 
+  // HOME — THIS WEEK day strip: click a day to swap the hero card above it
+  // for that day's session (see weekDayCardHTML). Clicking today's own dot
+  // just resets back to the default hero.
+  document.querySelectorAll("[data-week-day]").forEach((b) => b.onclick = () => {
+    const date = b.getAttribute("data-week-day");
+    selectedWeekDay = date === formatDate(new Date()) ? null : date;
+    renderWorkout();
+  });
+  const weekDayReset = document.querySelector("[data-week-day-reset]");
+  if (weekDayReset) weekDayReset.onclick = () => { selectedWeekDay = null; renderWorkout(); };
+  document.querySelectorAll("[data-view-day-history]").forEach((b) => b.onclick = () => openHistoryDetail(b.getAttribute("data-view-day-history")));
+  document.querySelectorAll("[data-begin-day-session]").forEach((b) => b.onclick = () => {
+    const date = b.getAttribute("data-begin-day-session");
+    const program = getActiveProgram();
+    if (!program) return;
+    const resolved = resolveSessionForDate(program, date);
+    if (resolved.status !== "session") return;
+    if (confirm(`Move "${resolved.slot.name}" to today and begin now?`)) {
+      selectedWeekDay = null;
+      startProgramSession(program, resolved);
+    }
+  });
+  document.querySelectorAll("[data-begin-day-freeform]").forEach((b) => b.onclick = () => {
+    selectedWeekDay = null;
+    screen = "templates";
+    renderWorkout();
+  });
+
   // TEMPLATES
   document.querySelectorAll("[data-select-template]").forEach((b) => b.onclick = () => {
     selectedTemplate = state.templates.find((t) => t.id === b.getAttribute("data-select-template"));
@@ -1600,6 +1785,33 @@ function attachScreenHandlers() {
   };
   const beginBtn = el("btn-begin-workout");
   if (beginBtn) beginBtn.onclick = () => beginWorkout(selectedTemplate, selectedVariant);
+
+  // READINESS
+  document.querySelectorAll("[data-readiness]").forEach((b) => b.onclick = () => {
+    const [key, n] = b.getAttribute("data-readiness").split(":");
+    readiness[key] = readiness[key] === Number(n) ? null : Number(n);
+    renderWorkout();
+  });
+  const readinessBack = el("btn-readiness-back");
+  if (readinessBack) readinessBack.onclick = () => {
+    pendingActiveWorkout = null;
+    if (pendingWorkoutOrigin === "preview") screen = "preview";
+    else { screen = null; tab = "home"; }
+    renderWorkout();
+  };
+  const readinessContinue = el("btn-readiness-continue");
+  if (readinessContinue) readinessContinue.onclick = () => {
+    activeWorkout = Object.assign(pendingActiveWorkout, {
+      startTime: new Date().toISOString(),
+      readiness: Object.assign({}, readiness),
+      notes: ""
+    });
+    pendingActiveWorkout = null;
+    screen = "active";
+    activeExIdx = 0;
+    startElapsedTimer();
+    renderWorkout();
+  };
 
   // ACTIVE WORKOUT
   document.querySelectorAll("[data-ex-name]").forEach((inp) => {
@@ -1632,7 +1844,22 @@ function attachScreenHandlers() {
   document.querySelectorAll("[data-ex-note]").forEach((b) => b.onclick = () => openNoteSheet(Number(b.getAttribute("data-ex-note"))));
   document.querySelectorAll("[data-ex-remove]").forEach((b) => b.onclick = () => {
     const idx = Number(b.getAttribute("data-ex-remove"));
-    if (activeWorkout.exercises.length > 1) { activeWorkout.exercises.splice(idx, 1); renderWorkout(); }
+    if (activeWorkout.exercises.length > 1) {
+      activeWorkout.exercises.splice(idx, 1);
+      if (activeExIdx >= activeWorkout.exercises.length) activeExIdx = activeWorkout.exercises.length - 1;
+      renderWorkout();
+    }
+  });
+  document.querySelectorAll("[data-set-done]").forEach((b) => b.onclick = () => {
+    const [exIdx, setIdx] = b.getAttribute("data-set-done").split(":").map(Number);
+    const s = activeWorkout.exercises[exIdx].sets[setIdx];
+    s.done = !s.done;
+    renderWorkout();
+  });
+  document.querySelectorAll("[data-round-done]").forEach((b) => b.onclick = () => {
+    const exIdx = Number(b.getAttribute("data-round-done"));
+    activeWorkout.exercises[exIdx].roundDone = !activeWorkout.exercises[exIdx].roundDone;
+    renderWorkout();
   });
   document.querySelectorAll("[data-set-field]").forEach((inp) => inp.onblur = (e) => {
     const [exIdx, setIdx, key] = inp.getAttribute("data-set-field").split(":");
@@ -1653,7 +1880,7 @@ function attachScreenHandlers() {
     const ex = activeWorkout.exercises[exIdx];
     const perSetKeys = (ex.fields || []).filter((k) => PER_SET_CAPABLE.includes(k));
     const template = ex.sets[ex.sets.length - 1] || {};
-    const row = {};
+    const row = { done: false };
     perSetKeys.forEach((k) => { row[k] = (k === "reps" && ex.ampap) ? "" : (template[k] != null ? template[k] : ""); });
     ex.sets.push(row);
     renderWorkout();
@@ -1663,12 +1890,18 @@ function attachScreenHandlers() {
     const [exIdx, seconds] = b.getAttribute("data-set-rest").split(":");
     startRestTimer(Number(exIdx), Number(seconds));
   });
-  const addExBtn = el("btn-add-exercise");
-  if (addExBtn) addExBtn.onclick = () => openExercisePicker();
+  const activeAddEx = el("btn-active-add-exercise");
+  if (activeAddEx) activeAddEx.onclick = () => openExercisePicker();
   const completeBtn = el("btn-complete-workout");
   if (completeBtn) completeBtn.onclick = () => { if (hasCompletedSet()) completeWorkout(); };
   const activeBack = el("btn-active-back");
   if (activeBack) activeBack.onclick = backFromActive;
+  const exPrev = el("btn-ex-prev");
+  if (exPrev) exPrev.onclick = () => { if (activeExIdx > 0) { activeExIdx--; pendingSwipeAnim = "right"; renderWorkout(); } };
+  const exNext = el("btn-ex-next");
+  if (exNext) exNext.onclick = () => { if (activeExIdx < activeWorkout.exercises.length) { activeExIdx++; pendingSwipeAnim = "left"; renderWorkout(); } };
+  const sessionNotes = el("wk-session-notes");
+  if (sessionNotes) sessionNotes.onblur = (e) => { activeWorkout.notes = e.target.value.slice(0, 500); };
 
   // HISTORY
   document.querySelectorAll("[data-open-history]").forEach((b) => b.onclick = () => openHistoryDetail(b.getAttribute("data-open-history")));
@@ -1880,13 +2113,14 @@ function beginWorkout(template, variant) {
     // why AMRAP silently vanished the moment a workout actually started.
     return buildLoggable(norm.name, norm.fields, norm, { ampap: !!norm.repsAmrap });
   });
-  activeWorkout = {
+  pendingActiveWorkout = {
     templateId: template.id, templateName: template.name,
     variantId: variant.id, variantName: variant.name,
-    startTime: new Date().toISOString(), exercises
+    exercises
   };
-  screen = "active";
-  startElapsedTimer();
+  pendingWorkoutOrigin = "preview";
+  readiness = { sleep: null, soreness: null, energy: null };
+  screen = "readiness";
   renderWorkout();
 }
 
@@ -2011,6 +2245,7 @@ function completeWorkout() {
   state.history = [completed, ...state.history];
   save();
   noteExIdx = null; activeWorkout = null; selectedVariant = null; selectedTemplate = null;
+  activeExIdx = 0; pendingActiveWorkout = null; readiness = null; selectedWeekDay = null;
   screen = null; tab = "home";
   renderWorkout();
   window.showToast && window.showToast("WORKOUT LOGGED");
@@ -2026,6 +2261,7 @@ function discardWorkout() {
   skipRestTimer();
   const wasProgram = !!(activeWorkout && activeWorkout.programId);
   noteExIdx = null; activeWorkout = null; selectedVariant = null;
+  activeExIdx = 0; pendingActiveWorkout = null; readiness = null;
   screen = wasProgram ? null : "variants";
   if (wasProgram) tab = "home";
   renderWorkout();
@@ -2077,6 +2313,7 @@ function pickExerciseFromLibrary(name, isNew) {
     ? buildLoggable(entry.name, entry.fields, entry.values, { id: "e-" + uid(), ampap: !!entry.ampap })
     : buildLoggable(name || "", ["sets","reps","weight"], { sets: 3 }, { id: "e-" + uid() });
   activeWorkout.exercises.push(loggable);
+  activeExIdx = activeWorkout.exercises.length - 1;
   renderWorkout();
 }
 
@@ -2254,6 +2491,19 @@ function detailBlockHTMLLegacy(ex) {
   </div>`;
 }
 
+const READINESS_LABELS = { sleep: "SLEEP", soreness: "SORENESS", energy: "ENERGY" };
+function readinessSummaryHTML(readinessObj) {
+  if (!readinessObj) return "";
+  const rows = Object.keys(READINESS_LABELS)
+    .filter((k) => readinessObj[k] != null)
+    .map((k) => `<div class="stat-line"><span class="lbl">${READINESS_LABELS[k]}</span><span class="val">${readinessObj[k]}/5</span></div>`)
+    .join("");
+  if (!rows) return "";
+  return `<div class="wk-detail-block" style="margin-bottom:10px;">
+    <div class="db-name">READINESS</div>
+    ${rows}
+  </div>`;
+}
 function openHistoryDetail(id) {
   const w = state.history.find((x) => x.id === id);
   if (!w) return;
@@ -2263,7 +2513,9 @@ function openHistoryDetail(id) {
   el("wk-detail-title").textContent = w.templateName;
   el("wk-detail-sub").textContent = `${w.variantName} · ${fmtFullDate(w.date)}${tod ? " · " + tod : ""}${dur ? " · " + dur : ""}`;
   const exercises = completedExercisesOf(w);
-  el("wk-detail-body").innerHTML = exercises.length ? exercises.map(detailBlockHTML).join("") : `<p class="hint-text">No completed sets recorded.</p>`;
+  const readinessHTML = readinessSummaryHTML(w.readiness);
+  const notesHTML = w.notes ? `<div class="wk-detail-block" style="margin-bottom:10px;"><div class="db-name">NOTES</div><p class="hint-text" style="margin-top:4px;">${escapeHTML(w.notes)}</p></div>` : "";
+  el("wk-detail-body").innerHTML = readinessHTML + notesHTML + (exercises.length ? exercises.map(detailBlockHTML).join("") : `<p class="hint-text">No completed sets recorded.</p>`);
   el("wk-detail-ex-count").textContent = exercises.length;
   el("wk-detail-set-count").textContent = exercises.reduce((sum, ex) => sum + ((ex.hasSets || ex.kind === "strength") ? (ex.sets ? ex.sets.length : 0) : 1), 0);
   openModal("wk-detail-overlay");
@@ -2327,6 +2579,35 @@ attachSwipeTabs(el("workout-screen"), ["home", "history", "manage"], () => tab, 
   renderWorkout();
 });
 
+// Swipe left/right between exercise pages while the active-workout screen
+// is up. Kept independent from attachSwipeTabs (used for TODAY/HISTORY/
+// MANAGE above) since the page count here is dynamic — one page per
+// exercise plus a trailing review page — rather than a fixed tab list, and
+// attachSwipeTabs's tabs array is captured once at attach time.
+(function attachExerciseSwipe() {
+  const scr = el("workout-screen");
+  if (!scr) return;
+  let startX = null, startY = null, tracking = false;
+  scr.addEventListener("pointerdown", (e) => {
+    if (screen !== "active" || !activeWorkout) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX = e.clientX; startY = e.clientY; tracking = true;
+    try { scr.setPointerCapture(e.pointerId); } catch (err) { /* best-effort only */ }
+  });
+  scr.addEventListener("pointerup", (e) => {
+    if (!tracking || startX === null) { tracking = false; return; }
+    tracking = false;
+    if (screen !== "active" || !activeWorkout) { startX = null; return; }
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    startX = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const maxIdx = activeWorkout.exercises.length; // one past the last exercise = the review page
+    if (dx < 0 && activeExIdx < maxIdx) { activeExIdx++; pendingSwipeAnim = "left"; renderWorkout(); }
+    else if (dx > 0 && activeExIdx > 0) { activeExIdx--; pendingSwipeAnim = "right"; renderWorkout(); }
+  });
+  scr.addEventListener("pointercancel", () => { tracking = false; startX = null; startY = null; });
+})();
+
 // Intercept the active-workout back action: since the active screen has no
 // in-screen back button of its own in this layout (top strip is hidden while
 // drilled in), back navigation for 'variants'/'templates'/'active'/'builder'
@@ -2344,7 +2625,7 @@ window.WorkoutData = {
   populateSettings: () => { el("settings-target-value").textContent = state.weeklyTarget; },
   weeklyStat: () => `${weeklyCount()}/${Math.max(1, state.weeklyTarget)} THIS WEEK`,
   refresh: () => renderWorkout(),
-  goHome: () => { screen = null; tab = "home"; renderWorkout(); },
+  goHome: () => { screen = null; tab = "home"; selectedWeekDay = null; renderWorkout(); },
   // Quick-add entry point (global bottom-strip plus button): jump straight
   // to "build a new workout template", same as MANAGE tab's "+ NEW".
   openCreate: () => { openBuilder(null); },
