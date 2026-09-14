@@ -161,6 +161,14 @@ function renderSevenSegClock(str) {
   }
   return out;
 }
+// Shared with other modules (currently the workout rest timer, see
+// workout.js's tickRestTimerFullscreen) so any numeric readout in the app
+// can render with the same real segmented-LCD look as the dashboard clock,
+// rather than each module rebuilding its own copy. Safe to call from
+// another module's event-handler code even though shell.js's own script
+// tag loads last (see index.html) — it only needs to exist by the time
+// something actually *calls* it, not at that module's own load time.
+window.renderSevenSegClock = renderSevenSegClock;
 
 function updateClock() {
   // The offset is a deliberate manual nudge (Settings > Dashboard), not a

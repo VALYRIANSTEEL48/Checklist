@@ -9,10 +9,21 @@
   --panel-alt:#171C14;
   --border:#2A2F2A;
   --text:#DEE3D6;
-  --text-dim:#828B7C;
+  /* Secondary/small text used to be a dimmer grey than primary text
+     throughout the app (labels, sub-lines, hints, timestamps — hundreds of
+     rules reference var(--text-dim) for exactly this). Now it's the same
+     white as --text on every regular tone, so the whole app reads as one
+     consistent text color instead of some of it looking faded out. */
+  --text-dim:var(--text);
   --radius:3px;
   --font-head:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
-  --font-mono:ui-monospace,'Roboto Mono','SFMono-Regular',Consolas,'Courier New',monospace;
+  /* Was ending in 'Courier New' as its last named fallback, which is
+     exactly the typewriter-y look that read as off-theme — dropped
+     entirely (falling through to the browser's own generic monospace
+     instead, which on virtually every modern platform is a cleaner face
+     than that) and reordered so the more broadly-available modern system
+     mono fonts get tried before the Apple/Adobe-specific ones. */
+  --font-mono:ui-monospace,'Cascadia Mono','Segoe UI Mono','SF Mono','SFMono-Regular','Roboto Mono',Consolas,Menlo,monospace;
 }
 /* "shadow" (the default look, defined on :root above) used to be called
    BLACKOUT — but it has a faint dark-olive cast, so BLACKOUT was
@@ -47,7 +58,10 @@ body[data-tone="crimson"]{
    without touching the person's saved tone/accent preference. */
 body.night-mode{
   --bg:#050201; --panel:#0D0603; --panel-alt:#150905; --border:#2B140C;
-  --text:#D9C2AE; --text-dim:#8C6C55;
+  /* All text renders as one bright red in night mode — both --text and
+     --text-dim share this value for the same reason as the regular-theme
+     fix above: every dim/secondary-text rule in the app reads var(--text-dim). */
+  --text:#FF3B30; --text-dim:#FF3B30;
   --accent:#9A4128; --accent-dim:#652C1A;
   --success:#6E7A50; --danger:#A6392A;
 }
@@ -503,6 +517,31 @@ ul{ list-style:none; margin:0; padding:0; }
 .sseg-dot-a{ top:10px; }
 .sseg-dot-b{ top:20px; }
 .sseg-suffix{ font-family:var(--font-mono); font-size:13px; letter-spacing:1px; color:var(--accent); margin-left:6px; vertical-align:middle; }
+/* Scales the whole segment cluster up for contexts more prominent than the
+   dashboard clock's own baseline size (currently just the rest-timer
+   countdown) without needing a second, separately-tuned copy of every
+   .sseg-* rule above — transform:scale() on a wrapper scales the absolute-
+   positioned segments and their spacing together, proportionally. */
+.sseg-scale-lg{ display:inline-block; transform:scale(2.1); transform-origin:center; }
+/* A real small-size variant (each dimension below is the baseline .sseg-*
+   value above scaled by ~0.47) rather than a transform:scale() like
+   .sseg-scale-lg — transform doesn't shrink the element's actual layout
+   box, only how it paints, so on a small inline chip like this one (with
+   its own tight border/padding) that would leave a lot of dead reserved
+   space around visually-tiny digits. Real dimensions avoid that. */
+.sseg-scale-sm .sseg-digit{ width:9px; height:16px; margin:0 1px; }
+.sseg-scale-sm .sseg-a{ top:0; left:1.2px; width:6.6px; height:1.6px; }
+.sseg-scale-sm .sseg-g{ top:7.2px; left:1.2px; width:6.6px; height:1.6px; }
+.sseg-scale-sm .sseg-d{ top:14.3px; left:1.2px; width:6.6px; height:1.6px; }
+.sseg-scale-sm .sseg-f{ top:.9px; left:0; width:1.6px; height:6.6px; }
+.sseg-scale-sm .sseg-b{ top:.9px; right:0; width:1.6px; height:6.6px; }
+.sseg-scale-sm .sseg-e{ top:8.5px; left:0; width:1.6px; height:6.6px; }
+.sseg-scale-sm .sseg-c{ top:8.5px; right:0; width:1.6px; height:6.6px; }
+.sseg-scale-sm .sseg-colon{ width:3.3px; height:16px; }
+.sseg-scale-sm .sseg-dot{ width:1.9px; height:1.9px; left:.7px; }
+.sseg-scale-sm .sseg-dot-a{ top:4.7px; }
+.sseg-scale-sm .sseg-dot-b{ top:9.4px; }
+.sseg-scale-sm .sseg-suffix{ font-size:11px; }
 
 .dash-lede{ display:flex; align-items:center; gap:8px; }
 .dash-lede-icon{ color:var(--accent); flex-shrink:0; display:flex; }
@@ -522,10 +561,15 @@ ul{ list-style:none; margin:0; padding:0; }
 .sitrep-cell{
   /* Padding/min-height trimmed to help the dashboard fit one screen —
      font sizes below are all back to their original values (not part of
-     the squeeze; only the card box itself shrinks). */
+     the squeeze; only the card box itself shrinks). min-width:0 matters
+     here: this cell is also a CSS grid item, and grid items default to
+     min-width:auto, meaning long unbroken text inside (e.g. a long primary
+     mission title, see .sc-stat-text) would otherwise force this whole
+     item — and the grid track/dashboard along with it — to stretch to fit
+     it instead of wrapping or ellipsizing. */
   display:flex; flex-direction:column; align-items:flex-start; text-align:left;
   background:var(--panel); border:1px solid var(--border); padding:10px 12px 11px;
-  border-radius:var(--radius); min-height:96px; box-sizing:border-box;
+  border-radius:var(--radius); min-height:96px; box-sizing:border-box; min-width:0;
 }
 .sitrep-cell:active{ transform:scale(.98); }
 .sc-top{ display:flex; align-items:center; gap:7px; margin-bottom:8px; color:var(--text-dim); }
@@ -533,7 +577,17 @@ ul{ list-style:none; margin:0; padding:0; }
 .sc-title{ font-size:10px; font-weight:700; letter-spacing:2px; }
 .sc-stat{ font-family:var(--font-mono); font-size:26px; font-weight:700; color:var(--accent); line-height:1.1; margin-top:auto; }
 .sc-stat-sep{ color:var(--text-dim); font-weight:400; margin:0 1px; }
-.sc-stat-text{ font-size:15px; letter-spacing:.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+/* A long primary-mission title (this is the only tile that shows free text
+   instead of a number) should wrap onto a second line rather than force
+   the tile — and the whole dashboard grid along with it — to stretch
+   wider. -webkit-line-clamp caps that wrap at 2 lines with a trailing
+   ellipsis as the edge case for anything longer still (widely supported
+   outside actual WebKit too, despite the prefix). */
+.sc-stat-text{
+  font-size:15px; letter-spacing:.5px; align-self:stretch; max-width:100%;
+  white-space:normal; word-break:break-word; overflow-wrap:break-word;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;
+}
 .sc-sub{ font-family:var(--font-mono); font-size:10px; letter-spacing:1px; color:var(--text-dim); margin-top:5px; }
 .sitrep-cell-wide{ grid-column:1 / -1; }
 
@@ -584,14 +638,22 @@ ul{ list-style:none; margin:0; padding:0; }
 
 .wk-week-strip{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:16px; }
 .wk-day-row{ display:flex; justify-content:space-between; margin-top:8px; }
-.wk-day{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+/* .wk-day is a <button> (so the whole day is tappable), not the plain
+   <div> it used to be — without resetting padding/margin/font explicitly,
+   the browser's default button chrome adds a bit of its own box model on
+   top of this, throwing the row's centering off just enough to notice. */
+.wk-day{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:0; margin:0; font:inherit; text-align:center; flex:1 1 0; }
 .wk-day-name{ font-size:10px; color:var(--text-dim); letter-spacing:1px; }
 .wk-day-dot{
   width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
   font-size:12px; background:var(--panel-alt); color:var(--text-dim); border:1px solid var(--border);
 }
 .wk-day-dot.today{ border-color:var(--accent); color:var(--text); }
-.wk-day-dot.done{ background:var(--success); color:#0B0E0C; border-color:var(--success); }
+/* Uses the selected theme accent, same as checklist's own "day complete"
+   treatment (.history-tape .hb.complete) — was pinned to --success (a
+   fixed green), which looked out of place next to everything else that
+   correctly follows the chosen accent color. */
+.wk-day-dot.done{ background:var(--accent); color:#0B0E0C; border-color:var(--accent); }
 .wk-day-dot.selected{ box-shadow:0 0 0 2px var(--accent) inset; }
 
 .wk-start-btn{
@@ -648,9 +710,10 @@ ul{ list-style:none; margin:0; padding:0; }
 .wk-set-input{ background:var(--panel-alt); border:1px solid var(--border); color:var(--text); border-radius:2px; padding:9px 8px; font-size:13px; width:100%; box-sizing:border-box; }
 .wk-set-input:focus{ outline:none; border-color:var(--accent); }
 .wk-set-remove{ color:var(--text-dim); font-size:16px; }
-.wk-set-rest-btn{ color:var(--text-dim); display:flex; align-items:center; justify-content:center; }
-.wk-set-rest-btn:active{ color:var(--accent); }
-.wk-add-set{ color:var(--accent); font-size:12px; letter-spacing:1px; margin-top:2px; }
+.wk-add-set{ color:var(--accent); font-size:12px; letter-spacing:1px; }
+/* One rest-timer button per exercise (bottom-right), replacing what used
+   to be a separate timer icon on every individual set row. */
+.wk-set-actions-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:2px; }
 
 .wk-elapsed-chip{ font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--accent); background:var(--panel-alt); border:1px solid var(--border); border-radius:2px; padding:6px 10px; flex-shrink:0; }
 
@@ -672,9 +735,12 @@ ul{ list-style:none; margin:0; padding:0; }
   width:20px; height:20px; border-radius:50%; border:1.5px solid var(--border); background:transparent;
   color:#0B0E0C; display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0;
 }
-.wk-set-done-circle.done{ background:var(--success); border-color:var(--success); }
+/* Accent, not --success — same reasoning as .wk-day-dot.done above: this
+   is "I marked my own set/round complete," which should track whichever
+   color the person actually picked, not stay a fixed green. */
+.wk-set-done-circle.done{ background:var(--accent); border-color:var(--accent); }
 .wk-round-done-toggle{ display:flex; align-items:center; gap:8px; margin-top:12px; font-size:11px; letter-spacing:1px; color:var(--text-dim); }
-.wk-round-done-toggle.done{ color:var(--success); }
+.wk-round-done-toggle.done{ color:var(--accent); }
 
 /* Pre-session readiness rating: five tappable number-dots per metric. */
 .readiness-row{ margin-bottom:20px; }
@@ -771,7 +837,9 @@ ul{ list-style:none; margin:0; padding:0; }
 .modal-btn-danger{ background:var(--danger); border:1px solid var(--danger); color:#fff; }
 
 .month-modal .cal-grid button{ font-size:12px; }
-.month-modal .cal-grid button.done{ background:var(--success); color:#0B0E0C; font-weight:700; }
+/* Accent, matching checklist's own "day complete" treatment — see the
+   .wk-day-dot.done comment above for the same reasoning. */
+.month-modal .cal-grid button.done{ background:var(--accent); color:#0B0E0C; font-weight:700; }
 
 .wk-detail-block{ background:var(--panel-alt); border:1px solid var(--border); border-radius:2px; padding:14px; margin-bottom:10px; }
 .wk-detail-block .db-name{ font-weight:600; font-size:13px; margin-bottom:8px; }
@@ -883,9 +951,9 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .amrap-toggle input{ width:14px; height:14px; }
 
 .rest-timer-btn{
-  width:100%; margin-top:12px; padding:10px; border-radius:2px; font-size:12px; font-weight:700; letter-spacing:1px;
+  padding:9px 14px; border-radius:2px; font-size:12px; font-weight:700; letter-spacing:1px;
   background:var(--panel-alt); border:1px solid var(--accent); color:var(--accent);
-  display:flex; align-items:center; justify-content:center; gap:8px;
+  display:flex; align-items:center; justify-content:center; gap:8px; flex-shrink:0; white-space:nowrap;
 }
 .single-fields-block{ margin-top:4px; }
 
@@ -914,7 +982,11 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .wk-rest-fullscreen.open{ opacity:1; pointer-events:auto; }
 .wk-rest-label{ font-size:13px; letter-spacing:4px; color:var(--text-dim); }
 .wk-rest-countdown{ font-family:var(--font-mono); font-size:72px; font-weight:700; color:var(--accent); line-height:1; transition:color .2s ease; }
+/* .done only matters for the fallback plain-text path (color) — the real
+   segmented render's "lit" color comes from .sseg-seg.sseg-on's own
+   background, so it needs its own override to pick up the same swap. */
 .wk-rest-countdown.done{ color:var(--success); }
+.wk-rest-countdown.done .sseg-seg.sseg-on{ background:var(--success); box-shadow:0 0 7px var(--success); }
 .wk-rest-adjust-row{ display:flex; gap:14px; }
 .wk-rest-adjust-btn{ background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:10px 18px; border-radius:var(--radius); font-size:13px; font-weight:600; }
 .wk-rest-adjust-btn:active{ border-color:var(--accent); color:var(--accent); }
@@ -935,7 +1007,9 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 
 .assignment-card{ display:block; width:100%; text-align:left; background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; }
 .assignment-card.overdue{ border-left-color:var(--danger); }
-.assignment-card.done{ border-left-color:var(--success); }
+/* Accent, matching checklist's own "done" treatment — no other assignment-
+   card state uses accent, so there's nothing for this to collide with. */
+.assignment-card.done{ border-left-color:var(--accent); }
 .ac-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px; }
 .ac-title{ font-size:14px; font-weight:600; }
 .ac-due{ font-family:var(--font-mono); font-size:11px; color:var(--text-dim); white-space:nowrap; flex-shrink:0; }
@@ -944,7 +1018,7 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .ac-progress-row{ display:flex; align-items:center; gap:8px; }
 .ac-progress-track{ flex:1; height:3px; background:var(--panel-alt); border-radius:2px; overflow:hidden; }
 .ac-progress-fill{ height:100%; background:var(--accent); }
-.assignment-card.done .ac-progress-fill{ background:var(--success); }
+.assignment-card.done .ac-progress-fill{ background:var(--accent); }
 .ac-progress-label{ font-family:var(--font-mono); font-size:10px; color:var(--text-dim); flex-shrink:0; }
 
 .subtask-row{ display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:11px 12px; margin-bottom:8px; }

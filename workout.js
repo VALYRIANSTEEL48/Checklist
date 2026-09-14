@@ -476,7 +476,12 @@ function renderWorkout() {
 
   el("workout-screen").innerHTML = html;
   if (pendingSwipeAnim) {
-    const scr = el("workout-screen");
+    // Animate #wk-active-page specifically when it exists (the active
+    // screen's per-exercise pages) so the transform never lands on an
+    // ancestor of the fixed-position sticky bar — see the comment above
+    // activeScreenHTML's return statements. Every other screen has no such
+    // fixed descendant, so animating #workout-screen itself is still fine.
+    const scr = el("wk-active-page") || el("workout-screen");
     scr.classList.remove("tab-swipe-left", "tab-swipe-right");
     void scr.offsetWidth; // force reflow so the animation replays
     scr.classList.add(pendingSwipeAnim === "left" ? "tab-swipe-left" : "tab-swipe-right");
@@ -1419,25 +1424,24 @@ function exerciseCardHTML(ex, exIdx) {
   let body = "";
   if (ex.hasSets) {
     const perSetKeys = sortFields(fields).filter((k) => PER_SET_CAPABLE.includes(k));
-    const cols = `22px 28px ${perSetKeys.map(() => "1fr").join(" ")} 26px 22px`;
+    const cols = `22px 28px ${perSetKeys.map(() => "1fr").join(" ")} 22px`;
     const restSeconds = Number(ex.log.restBetweenSets) || 90;
     body = `
-      <div class="wk-set-header" style="grid-template-columns:${cols};"><div></div><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div><div></div></div>
+      <div class="wk-set-header" style="grid-template-columns:${cols};"><div></div><div>SET</div>${perSetKeys.map((k) => `<div>${k === "weight" ? "WEIGHT" : k === "reps" ? "REPS" : k === "rpe" ? "RPE" : k === "duration" ? "MIN" : k === "distance" ? (ex.distanceUnit||"mi").toUpperCase() : k}</div>`).join("")}<div></div></div>
       ${ex.sets.map((s, setIdx) => `
         <div class="wk-set-row" style="grid-template-columns:${cols};">
           <button type="button" class="wk-set-done-circle ${s.done ? "done" : ""}" data-set-done="${exIdx}:${setIdx}" aria-label="Mark set complete">${s.done ? iconSVG("check", 12) : ""}</button>
           <div class="set-num">${setIdx + 1}</div>
           ${perSetKeys.map((k) => `<input type="number" class="wk-set-input" inputmode="decimal" placeholder="${ex.ampap && k === "reps" ? "reps" : ""}" value="${s[k] != null ? s[k] : ""}" data-set-field="${exIdx}:${setIdx}:${k}">`).join("")}
-          <button type="button" class="wk-set-rest-btn" data-set-rest="${exIdx}:${restSeconds}" aria-label="Start rest timer">${iconSVG("timer", 15)}</button>
           <button class="wk-set-remove" data-set-remove="${exIdx}:${setIdx}">×</button>
         </div>`).join("")}
-      <button class="wk-add-set" data-add-set="${exIdx}">+ ADD SET</button>`;
+      <div class="wk-set-actions-row">
+        <button class="wk-add-set" data-add-set="${exIdx}">+ ADD SET</button>
+        <button type="button" class="rest-timer-btn" data-rest-timer="${exIdx}">${iconSVG("timer", 14)} REST (${restSeconds}s)</button>
+      </div>`;
   }
   const singleKeys = sortFields(fields).filter((k) => ALWAYS_SINGLE.includes(k) || (!ex.hasSets && PER_SET_CAPABLE.includes(k)));
   if (singleKeys.length) {
-    const rtBtn = (ex.hasSets && ex.log.restBetweenSets)
-      ? `<button type="button" class="rest-timer-btn" data-rest-timer="${exIdx}">${iconSVG("timer", 14)} START REST (${ex.log.restBetweenSets}s)</button>`
-      : "";
     // Sets get a per-row circle above; an exercise with no sets (a single
     // logged round/activity — cardio, an interval block, etc.) gets one
     // circle for the whole thing instead.
@@ -1454,7 +1458,6 @@ function exerciseCardHTML(ex, exIdx) {
         return `<label class="field-label" style="margin:10px 0 4px;">${label}</label>
           <input type="number" class="wk-set-input" inputmode="${meta.inputmode || "decimal"}" ${meta.step ? `step="${meta.step}"` : ""} value="${ex.log[k]}" data-log-field="${exIdx}:${k}">`;
       }).join("")}
-      ${rtBtn}
       ${roundDoneToggle}
     </div>`;
   }
@@ -1485,17 +1488,25 @@ function activeScreenHTML() {
         <p class="hint-text" style="margin:2px 0 0;">${pageLabel}</p>
       </div>
       ${!onReview ? `<button class="icon-btn" id="btn-active-add-exercise" aria-label="Add exercise">${iconSVG("plus", 20)}</button>` : ""}
-      <div class="wk-elapsed-chip" id="wk-elapsed-time">${formatElapsedShort(activeWorkout.startTime)}</div>
+      <div class="wk-elapsed-chip" id="wk-elapsed-time">${elapsedChipHTML(formatElapsedShort(activeWorkout.startTime))}</div>
     </div>
     <div style="margin-bottom:16px;"></div>`;
 
+  // The page-slide animation (applied below in renderWorkout, to
+  // #wk-active-page specifically) uses a CSS transform. .wk-sticky-complete
+  // is position:fixed so it can float over the bottom of the viewport —
+  // but a `transform` on any ANCESTOR of a fixed-position element creates a
+  // new containing block for it, so if the sticky bar lived inside the
+  // animated wrapper it would get dragged along with the slide and visibly
+  // jump. Keeping it as a *sibling* of #wk-active-page (both still inside
+  // #workout-screen) instead keeps it pinned to the viewport throughout.
   if (onReview) {
     const canComplete = hasCompletedSet();
-    return `${headerHTML}
+    return `<div id="wk-active-page">${headerHTML}
       <div class="wk-exercise-card">
         <label class="field-label" style="margin-top:0;">SESSION NOTES</label>
         <textarea class="text-input" id="wk-session-notes" rows="4" placeholder="How did it feel? Anything to remember for next time...">${escapeHTML(activeWorkout.notes || "")}</textarea>
-      </div>
+      </div></div>
       <div class="wk-sticky-complete">
         <div class="wk-ex-pager">
           <button class="icon-btn" id="btn-ex-prev" aria-label="Previous exercise">
@@ -1508,8 +1519,8 @@ function activeScreenHTML() {
   }
 
   const ex = activeWorkout.exercises[activeExIdx];
-  return `${headerHTML}
-    ${exerciseCardHTML(ex, activeExIdx)}
+  return `<div id="wk-active-page">${headerHTML}
+    ${exerciseCardHTML(ex, activeExIdx)}</div>
     <div class="wk-sticky-complete">
       <div class="wk-ex-pager">
         <button class="icon-btn" id="btn-ex-prev" ${activeExIdx === 0 ? "disabled style='opacity:.3'" : ""} aria-label="Previous exercise">
@@ -1532,6 +1543,15 @@ function formatElapsedShort(startISO) {
   const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
+// Same real segmented-LCD render as the dashboard clock and the rest
+// countdown (see shell.js's renderSevenSegClock), scaled down to chip
+// size. Falls back to plain text if shell.js hasn't loaded yet — true in
+// this module's own jsdom tests, which load workout.js standalone, so
+// those keep exercising the plain-text path exactly as before.
+function elapsedChipHTML(str) {
+  if (window.renderSevenSegClock) return `<span class="sseg-scale-sm">${window.renderSevenSegClock(str)}</span>`;
+  return escapeHTML(str);
+}
 function stopElapsedTimer() {
   if (elapsedTimerHandle) clearInterval(elapsedTimerHandle);
   elapsedTimerHandle = null;
@@ -1544,7 +1564,7 @@ function startElapsedTimer() {
   elapsedTimerHandle = setInterval(() => {
     if (screen !== "active" || !activeWorkout) { stopElapsedTimer(); return; }
     const chip = el("wk-elapsed-time");
-    if (chip) chip.textContent = formatElapsedShort(activeWorkout.startTime);
+    if (chip) chip.innerHTML = elapsedChipHTML(formatElapsedShort(activeWorkout.startTime));
   }, 1000);
 }
 
@@ -1827,6 +1847,15 @@ function attachScreenHandlers() {
       renderWorkout();
     });
     inp.onblur = (e) => {
+      // Picking a suggestion from the autocomplete dropdown re-renders the
+      // whole exercise card (attachExerciseAutocomplete's onPick above
+      // calls renderWorkout()), which detaches this exact input from the
+      // document — but the browser still fires blur on it right after,
+      // since it was mid-focus when removed. Without this guard, that
+      // stale blur would run last and stomp the just-picked name back to
+      // whatever partial text was still sitting in the (now detached)
+      // input's .value, e.g. "bac" instead of "Back Squat".
+      if (!document.body.contains(e.target)) return;
       const idx = Number(inp.getAttribute("data-ex-name"));
       const ex = activeWorkout.exercises[idx];
       ex.name = e.target.value;
@@ -1885,11 +1914,11 @@ function attachScreenHandlers() {
     ex.sets.push(row);
     renderWorkout();
   });
+  // One rest-timer button per exercise now (bottom-right of the set list,
+  // next to + ADD SET) instead of one per set row — it reads that
+  // exercise's own rest duration via startRestTimer's own fallback
+  // (ex.log.restBetweenSets, or 90s), so no override is needed here.
   document.querySelectorAll("[data-rest-timer]").forEach((b) => b.onclick = () => startRestTimer(Number(b.getAttribute("data-rest-timer"))));
-  document.querySelectorAll("[data-set-rest]").forEach((b) => b.onclick = () => {
-    const [exIdx, seconds] = b.getAttribute("data-set-rest").split(":");
-    startRestTimer(Number(exIdx), Number(seconds));
-  });
   const activeAddEx = el("btn-active-add-exercise");
   if (activeAddEx) activeAddEx.onclick = () => openExercisePicker();
   const completeBtn = el("btn-complete-workout");
@@ -1973,6 +2002,11 @@ function attachScreenHandlers() {
       renderWorkout();
     });
     inp.onblur = (e) => {
+      // Same stale-blur hazard as the active-workout name input above:
+      // picking a suggestion re-renders and detaches this input, and its
+      // blur still fires afterward — ignore it if so, or it stomps the
+      // just-picked name back to the partially-typed text.
+      if (!document.body.contains(e.target)) return;
       const idx = Number(inp.getAttribute("data-bex-name"));
       const ex = activeVariant.exercises[idx];
       ex.name = e.target.value;
@@ -2209,6 +2243,16 @@ function fmtCountdown(totalSec) {
   const m = Math.floor(totalSec / 60), s = totalSec % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+// Renders the countdown with the same real segmented-LCD look as the
+// dashboard clock (shell.js's renderSevenSegClock — shared on window, see
+// its own comment for why calling it from here, after shell.js's own
+// script tag, is fine). Falls back to plain text if shell.js somehow
+// hasn't loaded yet, so this never hard-depends on script order.
+function setCountdownDisplay(countdownEl, totalSec) {
+  const str = fmtCountdown(totalSec);
+  if (window.renderSevenSegClock) countdownEl.innerHTML = `<span class="sseg-scale-lg">${window.renderSevenSegClock(str)}</span>`;
+  else countdownEl.textContent = str;
+}
 function tickRestTimerFullscreen() {
   clearTimeout(restTimerHandle);
   if (!restTimerState) { closeRestFullscreen(); return; }
@@ -2216,13 +2260,13 @@ function tickRestTimerFullscreen() {
   const countdownEl = el("wk-rest-countdown");
   if (remaining <= 0) {
     restTimerState = null;
-    if (countdownEl) { countdownEl.textContent = fmtCountdown(0); countdownEl.classList.add("done"); }
+    if (countdownEl) { setCountdownDisplay(countdownEl, 0); countdownEl.classList.add("done"); }
     window.showToast && window.showToast("REST COMPLETE");
     playRestCompleteAlert();
     setTimeout(() => { closeRestFullscreen(); if (countdownEl) countdownEl.classList.remove("done"); }, 700);
     return;
   }
-  if (countdownEl) countdownEl.textContent = fmtCountdown(remaining);
+  if (countdownEl) setCountdownDisplay(countdownEl, remaining);
   restTimerHandle = setTimeout(tickRestTimerFullscreen, 250);
 }
 function adjustRestTimer(deltaSec) {
