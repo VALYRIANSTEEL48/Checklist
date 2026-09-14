@@ -153,7 +153,7 @@ function prsHTML() {
    extension point for WHOOP stats later (resting HR, HRV, sleep,
    recovery) without restructuring this page. */
 function trendArrow(trend) {
-  if (trend === "up") return `<span style="color:var(--success);">▲</span>`;
+  if (trend === "up") return `<span style="color:var(--accent);">▲</span>`;
   if (trend === "down") return `<span style="color:var(--danger);">▼</span>`;
   return `<span style="color:var(--text-dim);">▬</span>`;
 }

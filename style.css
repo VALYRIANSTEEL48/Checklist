@@ -882,7 +882,10 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 
 .status-badge{ display:inline-block; font-size:9px; letter-spacing:1px; font-weight:700; padding:3px 7px; border-radius:2px; }
 .status-badge.draft{ background:var(--panel-alt); color:var(--text-dim); border:1px solid var(--border); }
-.status-badge.active{ background:var(--success); color:#0B0E0C; }
+/* "active" uses an accent OUTLINE (same treatment as .primary below) so it
+   stays visually distinct from "complete"'s FILLED accent, without falling
+   back to a fixed green that ignores the user's selected theme color. */
+.status-badge.active{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); }
 .status-badge.complete{ background:var(--accent); color:#0B0E0C; }
 .status-badge.primary{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); margin-left:6px; }
 
@@ -985,8 +988,8 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 /* .done only matters for the fallback plain-text path (color) — the real
    segmented render's "lit" color comes from .sseg-seg.sseg-on's own
    background, so it needs its own override to pick up the same swap. */
-.wk-rest-countdown.done{ color:var(--success); }
-.wk-rest-countdown.done .sseg-seg.sseg-on{ background:var(--success); box-shadow:0 0 7px var(--success); }
+.wk-rest-countdown.done{ color:var(--accent); }
+.wk-rest-countdown.done .sseg-seg.sseg-on{ background:var(--accent); box-shadow:0 0 7px var(--accent); }
 .wk-rest-adjust-row{ display:flex; gap:14px; }
 .wk-rest-adjust-btn{ background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:10px 18px; border-radius:var(--radius); font-size:13px; font-weight:600; }
 .wk-rest-adjust-btn:active{ border-color:var(--accent); color:var(--accent); }
@@ -1035,7 +1038,10 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .as-status-badge{ display:inline-block; font-size:9px; letter-spacing:1px; font-weight:700; padding:3px 8px; border-radius:2px; margin-bottom:14px; }
 .as-status-badge.planning{ background:var(--panel-alt); color:var(--text-dim); border:1px solid var(--border); }
 .as-status-badge.in_progress{ background:var(--accent); color:#0B0E0C; }
-.as-status-badge.completed{ background:var(--success); color:#0B0E0C; }
+/* "completed" uses an accent OUTLINE so it reads as distinct from
+   "in_progress"'s FILLED accent, without a fixed green that clashes
+   against whichever theme color the user has selected. */
+.as-status-badge.completed{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); }
 
 .completion-note-block{ background:var(--panel-alt); border:1px solid var(--border); border-radius:2px; padding:14px; margin-bottom:16px; }
 .completion-note-block .cn-label{ font-size:10px; letter-spacing:1px; color:var(--text-dim); margin-bottom:6px; }
@@ -1055,21 +1061,26 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
    detail view; the cog is the only way into the full edit/settings
    screen (see viewScreenHTML/detailScreenHTML in targets.js). */
 .habit-card{ display:flex; align-items:flex-start; gap:8px; width:100%; background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--radius); padding:14px 12px 14px 16px; margin-bottom:10px; }
-.habit-card.terminated{ border-left-color:var(--success); }
+/* "terminated" needs to read as visually distinct from a normal
+   accent-bordered active card, but a fixed green clashes against whichever
+   theme color the user has selected. --text-dim (a full-brightness,
+   theme-aware neutral, not the muted grey it used to be) gives a clearly
+   "greyed out / archived" look instead, without hardcoding a hue. */
+.habit-card.terminated{ border-left-color:var(--text-dim); }
 .hc-open{ flex:1; min-width:0; text-align:left; background:none; border:none; padding:0; }
 .hc-settings-btn{ flex-shrink:0; width:30px; height:30px; margin-top:2px; display:flex; align-items:center; justify-content:center; background:var(--panel-alt); border:1px solid var(--border); border-radius:50%; color:var(--text-dim); }
 .hc-settings-btn:active{ color:var(--accent); border-color:var(--accent); }
 
 .hc-hero{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
 .hc-icon{ width:32px; height:32px; border-radius:50%; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--accent); flex-shrink:0; }
-.habit-card.terminated .hc-icon{ color:var(--success); border-color:var(--success); }
+.habit-card.terminated .hc-icon{ color:var(--text-dim); border-color:var(--text-dim); }
 .hc-hero-body{ min-width:0; flex:1; }
 .hc-name{ font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hc-sub{ font-size:11px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px; }
 .hc-pct{ color:var(--text-dim); opacity:.7; }
 .hc-streak-pill{ font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--accent); flex-shrink:0; display:flex; align-items:baseline; gap:2px; }
 .hc-streak-pill span{ font-size:9px; color:var(--text-dim); font-weight:600; }
-.habit-card.terminated .hc-streak-pill{ color:var(--success); }
+.habit-card.terminated .hc-streak-pill{ color:var(--text-dim); }
 
 /* GitHub-style contribution heatmap, shared by the card (compact, no
    labels) and the read-only detail view (full, with weekday/month
@@ -1089,8 +1100,8 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .tg-contrib-grid .tg-cc.relapse{ background:var(--danger); }
 .tg-contrib-grid .tg-cc.before-start{ background:transparent; border:1px dashed var(--border); }
 .tg-contrib-grid .tg-cc.future{ background:transparent; }
-.habit-card.terminated .tg-contrib-grid .tg-cc.current{ background:var(--success); }
-.habit-card.terminated .tg-contrib-grid .tg-cc.clean{ background:var(--success); opacity:.35; }
+.habit-card.terminated .tg-contrib-grid .tg-cc.current{ background:var(--text-dim); }
+.habit-card.terminated .tg-contrib-grid .tg-cc.clean{ background:var(--text-dim); opacity:.35; }
 
 /* Read-only detail view (opened by tapping a card) */
 .tg-view-header{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
@@ -1126,14 +1137,21 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 
 .tg-status-badge{ display:inline-block; font-size:9px; letter-spacing:1px; font-weight:700; padding:3px 8px; border-radius:2px; margin-bottom:14px; }
 .tg-status-badge.active{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); }
-.tg-status-badge.terminated{ background:var(--success); color:#0B0E0C; }
+/* "terminated" is FILLED accent (vs. "active"'s outline) so the two stay
+   visually distinct without a fixed green fighting the selected theme. */
+.tg-status-badge.terminated{ background:var(--accent); color:#0B0E0C; }
 
 /* ===== WINS — category-colored left edge, same visual language as
    .assignment-card.overdue / .habit-card.terminated (colored left
    border = at-a-glance classification), applied to the generic
    .wk-history-row shape reused from Workouts' History tab. ===== */
 .win-card.cat-money{ border-left:3px solid var(--accent); }
-.win-card.cat-fitness{ border-left:3px solid var(--success); }
+/* Three categories need three visually distinct edge colors; --accent is
+   taken by "money" and --border is too subtle (matches the card's own
+   border). --text-dim (full-brightness, theme-aware) gives "fitness" a
+   clearly different, still theme-reactive third color instead of a fixed
+   green that can clash with the selected theme. */
+.win-card.cat-fitness{ border-left:3px solid var(--text-dim); }
 .win-card.cat-general{ border-left:3px solid var(--border); }
 
 /* ===== GAMIFICATION — rank-name settings grid + rank-up celebration ===== */

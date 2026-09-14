@@ -1164,6 +1164,13 @@ function attachSlotEditorHandlers() {
       renderSlotEditor();
     });
     inp.onblur = (e) => {
+      // Same stale-blur hazard as the workout builder/active-workout name
+      // inputs: picking a suggestion re-renders and detaches this input
+      // (renderSlotEditor() rebuilds #wk-slot-editor-body), and its blur
+      // still fires afterward — ignore it, or it stomps the just-picked
+      // name back to the partially-typed text.
+      if (!document.body.contains(e.target)) return;
+      if (inp._justPicked) { inp._justPicked = false; return; }
       const idx = Number(inp.getAttribute("data-block-name"));
       const block = slot.blocks[idx];
       block.name = e.target.value;
@@ -1856,6 +1863,11 @@ function attachScreenHandlers() {
       // whatever partial text was still sitting in the (now detached)
       // input's .value, e.g. "bac" instead of "Back Squat".
       if (!document.body.contains(e.target)) return;
+      // Belt-and-suspenders on top of the check above: if a pick just
+      // happened for this input, the name is already authoritative (set in
+      // attachExerciseAutocomplete's onPick callback) — don't re-derive it
+      // from .value here, which could still race against the rebuild.
+      if (inp._justPicked) { inp._justPicked = false; return; }
       const idx = Number(inp.getAttribute("data-ex-name"));
       const ex = activeWorkout.exercises[idx];
       ex.name = e.target.value;
@@ -2007,6 +2019,11 @@ function attachScreenHandlers() {
       // blur still fires afterward — ignore it if so, or it stomps the
       // just-picked name back to the partially-typed text.
       if (!document.body.contains(e.target)) return;
+      // Belt-and-suspenders on top of the check above: if a pick just
+      // happened for this input, the name is already authoritative (set in
+      // attachExerciseAutocomplete's onPick callback) — don't re-derive it
+      // from .value here, which could still race against the rebuild.
+      if (inp._justPicked) { inp._justPicked = false; return; }
       const idx = Number(inp.getAttribute("data-bex-name"));
       const ex = activeVariant.exercises[idx];
       ex.name = e.target.value;
@@ -2163,6 +2180,7 @@ function attachExerciseAutocomplete(inputEl, onPick) {
   let dropdown = null;
   const hide = () => { if (dropdown) { dropdown.remove(); dropdown = null; } };
   inputEl.addEventListener("input", () => {
+    inputEl._justPicked = false;
     const matches = searchLibrary(inputEl.value);
     hide();
     if (!matches.length) return;
@@ -2178,7 +2196,21 @@ function attachExerciseAutocomplete(inputEl, onPick) {
     dropdown.style.width = rect.width + "px";
     document.body.appendChild(dropdown);
     dropdown.querySelectorAll(".ac-item").forEach((item, i) => {
-      item.addEventListener("mousedown", (e) => { e.preventDefault(); onPick(matches[i]); hide(); });
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        // Flag this exact input node as "just picked" so whichever blur
+        // handler runs next (whether it lands on this node or, after
+        // onPick's renderWorkout() rebuilds the DOM, on the now-detached
+        // old node) knows the name was already authoritatively set here
+        // and skips re-deriving it from .value -- which at that point could
+        // still hold the partial text the user had typed, e.g. "bac"
+        // instead of the picked "Back Squat". The flag lives on the input
+        // object itself so it survives detachment. See the onblur handlers
+        // that consume it.
+        inputEl._justPicked = true;
+        onPick(matches[i]);
+        hide();
+      });
     });
   });
   inputEl.addEventListener("blur", () => { setTimeout(hide, 150); });
