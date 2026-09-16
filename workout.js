@@ -9,6 +9,9 @@
 "use strict";
 
 const STORAGE_KEY = "workout_state_v1";
+// Separate key (not part of `state`/save()) for the in-progress workout
+// session itself — see saveActiveSession()/tryResumeActiveSession() below.
+const ACTIVE_SESSION_KEY = "workout_active_session_v1";
 
 const defaultTemplates = [
   { id: "pull", name: "Pull", icon: "pull", variants: [
@@ -412,6 +415,80 @@ let slotEditorCtx = null;       // { phaseId, slotId } while the slot/block edit
 const el = (id) => document.getElementById(id);
 function isDrill() { return ["templates","variants","readiness","preview","active","builder","program-builder"].includes(screen); }
 
+/* ---------- ACTIVE-SESSION PERSISTENCE ----------
+   An in-progress workout previously lived only in the runtime `let`
+   variables above (activeWorkout, activeExIdx, etc.) — nothing was written
+   to localStorage until COMPLETE WORKOUT. On a real phone, a backgrounded
+   browser tab/PWA can get killed by the OS to reclaim memory (this is a
+   web-page limitation, not something JS can override — a native app is
+   given far more leeway to keep running in the background); when that
+   happened mid-workout, every logged set was silently gone. This section
+   snapshots the in-progress session to its own localStorage key on nearly
+   every change, and restores it on the next load instead of always
+   booting to the home screen — so a killed tab costs at most a few
+   seconds of data, never the whole workout. */
+function saveActiveSession() {
+  try {
+    if (activeWorkout && screen === "active") {
+      localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify({
+        v: 1, kind: "active",
+        activeWorkout, activeExIdx, restTimerState
+      }));
+    } else if (pendingActiveWorkout && screen === "readiness") {
+      localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify({
+        v: 1, kind: "readiness",
+        pendingActiveWorkout, pendingWorkoutOrigin, readiness
+      }));
+    } else {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
+  } catch (e) { /* best-effort — losing the autosave is better than a crash */ }
+}
+function clearActiveSession() {
+  try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch (e) { /* ignore */ }
+}
+// Runs once at module init, before the first render — see the bottom of
+// this file. Restores mid-workout or mid-readiness-check state so the user
+// picks up exactly where they left off instead of losing everything.
+function tryResumeActiveSession() {
+  let saved;
+  try {
+    const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+    if (!raw) return;
+    saved = JSON.parse(raw);
+  } catch (e) { clearActiveSession(); return; }
+  try {
+    if (saved.kind === "active" && saved.activeWorkout) {
+      activeWorkout = saved.activeWorkout;
+      activeExIdx = Number.isInteger(saved.activeExIdx) ? saved.activeExIdx : 0;
+      screen = "active";
+      tab = "home";
+      startElapsedTimer();
+      if (saved.restTimerState && saved.restTimerState.endsAt > Date.now()) {
+        restTimerState = saved.restTimerState;
+        openRestFullscreen();
+        tickRestTimerFullscreen();
+      } else {
+        restTimerState = null;
+      }
+      // Deferred past this module's own synchronous init (shell.js, which
+      // defines window.showToast, loads and runs after workout.js's script
+      // tag — see index.html's script order) so the toast actually shows.
+      setTimeout(() => { window.showToast && window.showToast("WORKOUT RESUMED"); }, 0);
+    } else if (saved.kind === "readiness" && saved.pendingActiveWorkout) {
+      pendingActiveWorkout = saved.pendingActiveWorkout;
+      pendingWorkoutOrigin = saved.pendingWorkoutOrigin || "home";
+      readiness = saved.readiness || { sleep: null, soreness: null, energy: null };
+      screen = "readiness";
+      tab = "home";
+    }
+  } catch (e) {
+    console.error("Failed to resume active workout session, discarding it.", e);
+    activeWorkout = null; pendingActiveWorkout = null; screen = null;
+    clearActiveSession();
+  }
+}
+
 /* ---------- DERIVED DATA ---------- */
 function workoutDaysSet() { return new Set(state.history.map((w) => w.date)); }
 function weeklyCount() {
@@ -473,6 +550,15 @@ function renderWorkout() {
     html = errorScreenHTML(err);
     hadError = true;
   }
+
+  // Piggyback the active-session autosave on every render: renderWorkout()
+  // runs after nearly every mutation to activeWorkout/pendingActiveWorkout
+  // while a workout is in progress (set/round toggles, field edits, adding
+  // an exercise, changing pages, readiness taps, etc.), so this alone
+  // covers almost all of it. A few mutations don't call renderWorkout()
+  // themselves (session notes, rest-timer adjustments) and call this
+  // directly instead — see saveActiveSession()'s other call sites.
+  saveActiveSession();
 
   el("workout-screen").innerHTML = html;
   if (pendingSwipeAnim) {
@@ -604,7 +690,17 @@ function homeScreenHTML() {
   }).join("");
 
   const activeProgram = getActiveProgram();
-  const heroHTML = showingDay ? weekDayCardHTML(showingDay) : activeProgram ? programHeroHTML(activeProgram) : `
+  // Whether to show BEGIN SESSION / START NEW WORKOUT vs. a completed
+  // state must depend on whether a workout was actually logged today
+  // (state.history), not on what the program's schedule says should
+  // happen today (resolveSessionForDate) — those can disagree, e.g. once
+  // today's workout is already done, the schedule still says "today is a
+  // session day" and would otherwise keep offering to begin it again until
+  // the date rolls over.
+  const todayHistEntry = state.history.find((w) => w.date === todayStr);
+  const heroHTML = showingDay ? weekDayCardHTML(showingDay)
+    : todayHistEntry ? todayCompletedHeroHTML(todayHistEntry)
+    : activeProgram ? programHeroHTML(activeProgram) : `
     <button class="wk-target-card" id="btn-open-target">
       <div class="wk-ring-wrap">
         <svg width="52" height="52">
@@ -636,6 +732,25 @@ function homeScreenHTML() {
     <div class="wk-section-title">MONTHLY PROGRESS</div>
     <div class="wk-hscroll">${monthsHTML}</div>
   `;
+}
+
+// Today's hero once a workout has already been logged today — takes
+// priority over the program hero / start-new-workout button regardless of
+// whether there's an active program, since "did I already work out today"
+// is a completion fact, not something a schedule can answer. Mirrors
+// weekDayCardHTML's own histEntry branch (same COMPLETE badge + VIEW
+// METRICS pattern) but adds a way to log a second workout the same day,
+// since history already supports (and weeklyCount already counts)
+// multiple entries per date.
+function todayCompletedHeroHTML(entry) {
+  const dur = formatDuration(entry.startTime, entry.endTime);
+  return `<div class="program-hero corner-bracket">
+    <div class="ph-top"><span class="ph-week">TODAY</span><span class="status-badge complete">COMPLETE</span></div>
+    <div class="ph-title">${escapeHTML(entry.templateName)}</div>
+    <div class="ph-sub">${escapeHTML(entry.variantName)}${dur ? " · " + dur : ""}</div>
+    <button class="wk-start-btn" style="margin-bottom:0;" data-view-day-history="${entry.id}">${iconSVG("check", 18)} VIEW METRICS</button>
+    <a class="ph-freeform-link" data-goto-templates="1">or start another workout</a>
+  </div>`;
 }
 
 function programHeroHTML(program) {
@@ -1942,7 +2057,13 @@ function attachScreenHandlers() {
   const exNext = el("btn-ex-next");
   if (exNext) exNext.onclick = () => { if (activeExIdx < activeWorkout.exercises.length) { activeExIdx++; pendingSwipeAnim = "left"; renderWorkout(); } };
   const sessionNotes = el("wk-session-notes");
-  if (sessionNotes) sessionNotes.onblur = (e) => { activeWorkout.notes = e.target.value.slice(0, 500); };
+  if (sessionNotes) sessionNotes.onblur = (e) => {
+    activeWorkout.notes = e.target.value.slice(0, 500);
+    // Doesn't call renderWorkout() (no need to re-render for a notes edit),
+    // so the render-piggybacked autosave above wouldn't see this change —
+    // save it directly instead.
+    saveActiveSession();
+  };
 
   // HISTORY
   document.querySelectorAll("[data-open-history]").forEach((b) => b.onclick = () => openHistoryDetail(b.getAttribute("data-open-history")));
@@ -2261,6 +2382,11 @@ function startRestTimer(exIdx, secondsOverride) {
   restTimerState = { exIdx, endsAt: Date.now() + seconds * 1000 };
   openRestFullscreen();
   tickRestTimerFullscreen();
+  // None of the rest-timer functions go through renderWorkout(), so they
+  // save the active session directly rather than relying on the render
+  // piggyback — otherwise a kill mid-rest would lose the countdown (or
+  // worse, resume it as if no time had passed).
+  saveActiveSession();
 }
 function openRestFullscreen() {
   const overlay = el("wk-rest-fullscreen-overlay");
@@ -2292,6 +2418,7 @@ function tickRestTimerFullscreen() {
   const countdownEl = el("wk-rest-countdown");
   if (remaining <= 0) {
     restTimerState = null;
+    saveActiveSession();
     if (countdownEl) { setCountdownDisplay(countdownEl, 0); countdownEl.classList.add("done"); }
     window.showToast && window.showToast("REST COMPLETE");
     playRestCompleteAlert();
@@ -2304,11 +2431,13 @@ function tickRestTimerFullscreen() {
 function adjustRestTimer(deltaSec) {
   if (!restTimerState) return;
   restTimerState.endsAt = Math.max(Date.now() + 1000, restTimerState.endsAt + deltaSec * 1000);
+  saveActiveSession();
 }
 function skipRestTimer() {
   clearTimeout(restTimerHandle);
   restTimerState = null;
   closeRestFullscreen();
+  saveActiveSession();
 }
 
 function completeWorkout() {
@@ -2730,6 +2859,19 @@ window.WorkoutData = {
 };
 
 /* ---------- INIT ---------- */
+// Restore an in-progress workout (or readiness check) before the first
+// render, if one was left running — see the ACTIVE-SESSION PERSISTENCE
+// section above.
+tryResumeActiveSession();
 renderWorkout();
+
+// Belt-and-suspenders on top of the render-piggybacked autosave: force a
+// save the instant the tab is backgrounded or torn down, since that's
+// exactly the moment a mobile OS might kill it to reclaim memory — no
+// guarantee every intermediate edit already triggered a render before
+// then. visibilitychange fires reliably when a PWA/tab is backgrounded;
+// pagehide is a second best-effort signal for outright navigation/unload.
+document.addEventListener("visibilitychange", () => { if (document.hidden) saveActiveSession(); });
+window.addEventListener("pagehide", () => saveActiveSession());
 
 })();
