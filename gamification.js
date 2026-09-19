@@ -9,7 +9,7 @@
    ledger drifting from reality) for free, consistent with the
    "resolve on demand, don't store derived state" principle used
    elsewhere in this app (Checklist streaks, Program session
-   resolution, Targets' "terminated" flag).
+   resolution, Hit List's "terminated" flag).
 
    Has no view/screen of its own — it's a read layer, surfaced on the
    dashboard (small readout) and on Profile (hero block) and via the
@@ -32,14 +32,38 @@ const DEFAULT_RANK_NAMES = ["RECRUIT","PRIVATE","CORPORAL","SERGEANT","LIEUTENAN
 // retune once there's real point accumulation to look at.
 const RANK_LEVEL_THRESHOLDS = [1, 5, 10, 15, 20, 25, 30, 35, 40];
 
+// Day thresholds an "everyday" Target's streak earns an escalating
+// milestone bonus at (see everydayMilestonesCrossed below) — 7/30/90/180
+// days, then every full year. Deliberately front-loaded and then
+// stretched way out: the whole point of the "everyday" target type is
+// making a long, never-missed streak feel like it's worth vastly more
+// than "consistent most of the time", not just a little more.
+const EVERYDAY_MILESTONES = [7, 30, 90, 180, 365];
+function everydayMilestonesCrossed(days) {
+  let count = EVERYDAY_MILESTONES.filter((m) => days >= m).length;
+  if (days > 365) count += Math.floor(days / 365) - 1; // one more per additional full year past the first
+  return count;
+}
+
 // Point values per source. Also tunable.
 const POINTS = {
   appOpenPerDay: 5,
   checklistFullDay: 15,
   workoutLogged: 20,
   weeklyTargetHit: 25,
-  targetCleanDay: 3,
-  targetGoalReached: 100,
+  hitlistCleanDay: 3,
+  hitlistGoalReached: 100,
+  // New Targets module (goals.js) — a target set on an existing task or
+  // the general workout streak, layered on top of that streak's own
+  // counter rather than tracking anything itself. Fixed-duration targets
+  // (e.g. "7 days") refill and re-award every time the streak completes
+  // another cycle of that length; "everyday" targets never refill or
+  // reset the bonus — they just pay out bigger milestone bonuses (see
+  // everydayMilestonesCrossed) plus a small flat daily trickle the whole
+  // time they stay unbroken.
+  targetHit: 50,
+  targetEverydayDay: 2,
+  targetEverydayMilestone: 150,
   assignmentCompleted: 30,
   assignmentOnTimeBonus: 10,
   missionMilestone: 40,
@@ -176,9 +200,15 @@ function computeTotalPoints() {
     total += countWeeksHittingTarget(ws) * POINTS.weeklyTargetHit;
   }
 
+  if (window.HitListData) {
+    total += window.HitListData.totalCleanDaysAcrossHabits() * POINTS.hitlistCleanDay;
+    total += window.HitListData.terminatedCount() * POINTS.hitlistGoalReached;
+  }
+
   if (window.TargetsData) {
-    total += window.TargetsData.totalCleanDaysAcrossHabits() * POINTS.targetCleanDay;
-    total += window.TargetsData.terminatedCount() * POINTS.targetGoalReached;
+    total += window.TargetsData.totalHitCount() * POINTS.targetHit;
+    total += window.TargetsData.totalEverydayActiveDays() * POINTS.targetEverydayDay;
+    total += window.TargetsData.totalEverydayMilestonesCrossed(everydayMilestonesCrossed) * POINTS.targetEverydayMilestone;
   }
 
   if (window.AssignmentsData) {

@@ -117,8 +117,8 @@ function milestoneProgress(m) {
 /* ---------- LIST SCREEN ----------
    Missions are rare and long-lived, so a flat list is enough — no
    3-tab structure like Assignments. Active first, a secondary
-   COMPLETED group below, same grouping pattern Targets uses for
-   IN PROGRESS / TERMINATED. */
+   COMPLETED group below, same grouping pattern Hit List uses for
+   ELIMINATING / TERMINATED. */
 function listScreenHTML() {
   const active = state.missions.filter((m) => m.status !== "completed")
     .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));

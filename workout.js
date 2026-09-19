@@ -491,6 +491,29 @@ function tryResumeActiveSession() {
 
 /* ---------- DERIVED DATA ---------- */
 function workoutDaysSet() { return new Set(state.history.map((w) => w.date)); }
+function addDaysStrLocal(ds, n) {
+  const d = new Date(ds + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return formatDate(d);
+}
+// Consecutive calendar days (ending today, or yesterday if today hasn't
+// been logged yet — same "don't break it just because today isn't done
+// yet" convention Checklist's own computeMainStreak uses) with at least
+// one workout logged. Exposed for the Targets module (goals.js): the
+// "general workout streak" a target can be set on, same idea as a
+// Checklist task's own per-task streak.
+function computeWorkoutStreak() {
+  const days = workoutDaysSet();
+  const today = formatDate(new Date());
+  let cursor = days.has(today) ? today : addDaysStrLocal(today, -1);
+  let streak = 0;
+  let guard = 0;
+  while (days.has(cursor) && guard < 3660) {
+    streak++; guard++;
+    cursor = addDaysStrLocal(cursor, -1);
+  }
+  return streak;
+}
 function weeklyCount() {
   const dates = getWeekDays().map((d) => d.date);
   return state.history.filter((w) => dates.includes(w.date)).length;
@@ -2829,6 +2852,9 @@ window.WorkoutData = {
   wipe: () => { state = defaultState(); save(); renderWorkout(); },
   populateSettings: () => { el("settings-target-value").textContent = state.weeklyTarget; },
   weeklyStat: () => `${weeklyCount()}/${Math.max(1, state.weeklyTarget)} THIS WEEK`,
+  // Exposed for the Targets module (goals.js): the general "did I train
+  // today" streak a target can be set on.
+  workoutStreak: () => computeWorkoutStreak(),
   refresh: () => renderWorkout(),
   goHome: () => { screen = null; tab = "home"; selectedWeekDay = null; renderWorkout(); },
   // Quick-add entry point (global bottom-strip plus button): jump straight

@@ -8,11 +8,11 @@ your phone — icon in the app drawer, opens full-screen, works with no
 signal. All data is stored only on your phone; nothing is sent anywhere.
 
 As of this version, the app is a single **Command dashboard** — a SITREP-style
-home screen — with seven modules — **Checklist**, **Workouts**,
-**Assignments**, **Targets**, **Missions**, **Wins**, and **Profile** — each
-with its own data, plus one shared Settings sheet. A **Power Level** system
-runs quietly underneath all of them, turning what you're already doing into
-points, levels, and ranks.
+home screen — with eight modules — **Checklist**, **Workouts**,
+**Assignments**, **Hit List**, **Targets**, **Missions**, **Wins**, and
+**Profile** — each with its own data, plus one shared Settings sheet. A
+**Power Level** system runs quietly underneath all of them, turning what
+you're already doing into points, levels, and ranks.
 
 ## Step 1 — Put the files somewhere your phone can reach over HTTPS
 
@@ -181,34 +181,59 @@ Workouts.
   highlight as an overdue checklist task.
 - A completed assignment can be reopened if you're not actually done.
 
-**Targets** — habit elimination, tracked as the inverse of the checklist:
+**Hit List** — habit elimination, tracked as the inverse of the checklist:
 every day you *don't* log the habit is a day of progress, and logging it
 resets the count. No reset time, no daily interaction required — it just
-runs in the background off the calendar.
-- **+ Add Target** offers four quick presets (Pornography, Weed, Smoking,
-  Alcohol) or a custom one — name, a reason for wanting it gone, and a
-  target day count (90 by default, adjustable any time via the stepper).
+runs in the background off the calendar. (Formerly called "Targets" — a
+target is something you aim for, not something you're trying to eliminate,
+so it was renamed to make room for the actual Targets module below.)
+- **+ Add To Hit List** offers four quick presets (Pornography, Weed,
+  Smoking, Alcohol) or a custom one — name, a reason for wanting it gone,
+  and a goal day count (90 by default, adjustable any time via the
+  stepper).
 - Card list view now leads with a big streak number — the single most
   important thing on the card — next to a compact 14-day history strip,
-  pulling Targets' identity toward the checklist's streak header instead
+  pulling Hit List's identity toward the checklist's streak header instead
   of looking like an Assignments card wearing a different label.
 - The detail screen's readout has a denser 6-week (42-day) heatmap-style
   grid instead of a single strip — a compressed contribution graph, easier
   to read as "here's your actual history" than a percentage.
 - **"Terminated" isn't a locked state** — it's simply what shows once
-  your current unbroken streak reaches the target. There's no separate
+  your current unbroken streak reaches the goal. There's no separate
   status to manage; it's computed live from your start date and relapse
   log, so a relapse after termination just flips it back to "in
   progress" automatically.
 - **Log Relapse** opens a short form: the date it happened (editable, in
   case you're logging it a day late), what triggered it, what you'll do
-  differently, optional notes, and a chance to adjust the target if it
+  differently, optional notes, and a chance to adjust the goal if it
   wasn't realistic. The streak recalculates immediately.
 - The start date can only be edited before the first relapse is logged,
   so the streak math can't be retroactively thrown off once real history
   exists.
-- Relapse history is kept per target, tap any entry to expand the full
-  notes.
+- Relapse history is kept per entry, tap any one to expand the full notes.
+
+**Targets** — the positive counterpart to Hit List: pick something you're
+already tracking (a repeating Checklist task, or your general "did I train
+today" Workout streak) and set a target on it. Nothing is tracked here
+directly — it's a thin layer over the streak counters those modules already
+keep, so there's nothing to keep in sync.
+- **Fixed-duration targets** (e.g. 7 days) fill a progress bar as the
+  underlying streak runs; hitting it awards points and the bar refills for
+  the next cycle. Great for breaking in a new habit with a short, winnable
+  first goal.
+- **Everyday targets** are a bigger commitment: no fixed length, no
+  refilling bar — just a streak that's meant to never break. Points from
+  an everyday target come from two places: a small flat amount for every
+  day it stays alive, and much larger one-time bonuses at length
+  milestones (a week, a month, three months, six months, a year, then
+  every additional year). The reward is deliberately front-loaded toward
+  those milestones — the gap between a habit you're "pretty consistent"
+  about and one you have never once missed in years is enormous, and the
+  points are meant to reflect that.
+- A target's progress is entirely derived from the task's or workout's own
+  streak — breaking that streak resets the target's progress right along
+  with it, same as everywhere else in the app that avoids storing anything
+  twice.
 
 **Missions** — long-horizon goals, months to years, not days to weeks like
 Assignments. Deliberately kept separate from Assignments — a Mission's steps
@@ -234,15 +259,16 @@ here is stored on its own; it reads live from every other module and
 computes everything fresh. Shows your Power Level and Rank (hero block),
 your Primary Mission's progress, your best lifts auto-detected from
 Workouts history (max weight + estimated 1RM via the Epley formula),
-strength/aerobic trend direction, a streak overview across Checklist and
-Targets, and a Wins summary.
+strength/aerobic trend direction, a streak overview across Checklist, Hit
+List, and Targets, and a Wins summary.
 
 **Power Level** — a small chip near the dashboard header (tap it to open
 Profile) tracks your overall level and rank. Nothing is logged as a
 point-earning event — the total is recalculated fresh each time from
 what's already in your other modules (checklist streak days, workouts
-logged, weekly targets hit, clean days across Targets, completed
-Assignments/Missions, logged Wins, and days you opened the app), so
+logged, weekly targets hit, clean days across Hit List, Targets hit and
+milestones reached, completed Assignments/Missions, logged Wins, and days
+you opened the app), so
 there's no separate ledger that can drift out of sync. Crossing a level
 threshold pops a celebration screen once. Rank names (RECRUIT, PRIVATE,
 etc.) are placeholders — rename all nine tiers yourself in Settings.

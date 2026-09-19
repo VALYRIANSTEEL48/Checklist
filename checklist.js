@@ -1011,6 +1011,17 @@ window.ChecklistData = {
   // logic, not a small utility, so it gets one source of truth instead
   // of being re-implemented.
   isDayComplete,
+  // Exposed for the Targets module (goals.js): the per-task streak this
+  // already computes internally for its own task-detail readout, reused
+  // rather than re-derived — a Target just watches this number, it
+  // doesn't track anything of its own.
+  taskStreak: (taskId) => {
+    const t = state.tasks.find((x) => x.id === taskId);
+    return t ? computeTaskStats(t).streak || 0 : 0;
+  },
+  // Repeating tasks only — the ones a Target can actually be set on (a
+  // one-off task has no meaningful streak, see computeTaskStats above).
+  repeatingTasks: () => state.tasks.filter((t) => t.recurrence === "repeating" && !t.paused),
   // Dashboard SITREP summary: today's due/done counts and the next
   // not-yet-done scheduled task (by time, falling back to the first
   // remaining task of any kind). Resolved on demand, nothing stored.

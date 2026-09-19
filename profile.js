@@ -210,12 +210,19 @@ function checklistStreakStat() {
   const streak = window.ChecklistData.mainStreak();
   return { label: "CHECKLIST STREAK", value: `${streak} DAY${streak === 1 ? "" : "S"}`, trend: "flat", source: "checklist" };
 }
+function hitlistOverviewStat() {
+  if (!window.HitListData) return null;
+  const n = window.HitListData.trackedCount();
+  if (!n) return null;
+  const best = window.HitListData.bestStreak();
+  return { label: "HIT LIST", value: `${n} tracked, longest streak ${best}d`, trend: "flat", source: "hitlist" };
+}
 function targetsOverviewStat() {
   if (!window.TargetsData) return null;
-  const n = window.TargetsData.trackedCount();
+  const n = window.TargetsData.activeCount();
   if (!n) return null;
-  const best = window.TargetsData.bestStreak();
-  return { label: "TARGETS", value: `${n} tracked, longest streak ${best}d`, trend: "flat", source: "targets" };
+  const hits = window.TargetsData.hitCount();
+  return { label: "TARGETS", value: `${n} active, ${hits} hit`, trend: "flat", source: "targets" };
 }
 function assignmentVelocityStat() {
   if (!window.AssignmentsData) return null;
@@ -226,7 +233,7 @@ function assignmentVelocityStat() {
   const pct = Math.round((onTime / completed.length) * 100);
   return { label: "ASSIGNMENTS", value: `${completed.length} completed, ${pct}% on time`, trend: "flat", source: "assignments" };
 }
-const STAT_SOURCES = [checklistStreakStat, targetsOverviewStat, assignmentVelocityStat, strengthTrendStat, aerobicTrendStat];
+const STAT_SOURCES = [checklistStreakStat, hitlistOverviewStat, targetsOverviewStat, assignmentVelocityStat, strengthTrendStat, aerobicTrendStat];
 function statsHTML() {
   const stats = STAT_SOURCES.map((fn) => { try { return fn(); } catch (e) { console.error("Profile stat source failed:", e); return null; } }).filter(Boolean);
   if (!stats.length) return "";

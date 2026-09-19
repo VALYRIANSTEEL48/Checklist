@@ -572,6 +572,14 @@ ul{ list-style:none; margin:0; padding:0; }
   border-radius:var(--radius); min-height:96px; box-sizing:border-box; min-width:0;
 }
 .sitrep-cell:active{ transform:scale(.98); }
+/* Missions now sits alone at the bottom of the grid, spanning both
+   columns (1x2) instead of sharing a row — see index.html's dashboard
+   grid comment for the reorg this belongs to. */
+.sitrep-cell-wide{ grid-column:span 2; flex-direction:row; align-items:center; gap:14px; min-height:auto; padding:14px 16px; }
+.sitrep-cell-wide .sc-top{ margin-bottom:0; flex-shrink:0; }
+.sitrep-cell-wide .sc-stat{ margin-top:0; flex:1; min-width:0; text-align:right; }
+.sitrep-cell-wide .sc-stat-text{ -webkit-line-clamp:1; }
+.sitrep-cell-wide .sc-sub{ flex-shrink:0; }
 .sc-top{ display:flex; align-items:center; gap:7px; margin-bottom:8px; color:var(--text-dim); }
 .sc-icon{ color:var(--accent); display:flex; flex-shrink:0; }
 .sc-title{ font-size:10px; font-weight:700; letter-spacing:2px; }
@@ -1048,13 +1056,13 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .completion-note-block .cn-text{ font-size:13px; line-height:1.6; white-space:pre-wrap; }
 
 /* =========================================================
-   TARGETS MODULE
+   HIT LIST MODULE
    ========================================================= */
-#targets-screen{ padding:14px 16px 40px; }
+#hitlist-screen{ padding:14px 16px 40px; }
 
-.tg-readout-panel{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:18px; display:flex; }
-.tg-readout-block{ flex:1; }
-.tg-readout-block + .tg-readout-block{ border-left:1px solid var(--border); padding-left:16px; margin-left:16px; }
+.hl-readout-panel{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:18px; display:flex; }
+.hl-readout-block{ flex:1; }
+.hl-readout-block + .hl-readout-block{ border-left:1px solid var(--border); padding-left:16px; margin-left:16px; }
 
 /* Card is now a row: the tappable summary (.hc-open) plus a sibling
    settings cog (.hc-settings-btn) — tapping the card opens a read-only
@@ -1087,31 +1095,31 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
    labels) via contributionGridHTML()'s `compact` flag in targets.js.
    "current" = inside the unbroken streak right now (brighter accent);
    "clean" = a clean day from an earlier, already-broken streak (dimmer). */
-.tg-contrib-top{ display:flex; gap:4px; }
-.tg-contrib-weekdays{ display:grid; grid-template-rows:repeat(7,1fr); width:16px; flex-shrink:0; margin-top:14px; font-size:8px; color:var(--text-dim); }
-.tg-contrib-weekdays span{ display:flex; align-items:center; }
-.tg-contrib-body{ flex:1; min-width:0; }
-.tg-contrib-months{ display:grid; grid-auto-flow:column; grid-auto-columns:1fr; height:12px; margin-bottom:2px; font-size:8px; color:var(--text-dim); }
-.tg-contrib-grid{ display:grid; grid-template-rows:repeat(7,1fr); grid-auto-flow:column; grid-auto-columns:1fr; gap:2px; }
-.tg-contrib.compact .tg-contrib-grid{ margin-top:12px; }
-.tg-contrib-grid .tg-cc{ aspect-ratio:1; border-radius:1px; background:var(--panel-alt); }
-.tg-contrib-grid .tg-cc.clean{ background:var(--accent); opacity:.35; }
-.tg-contrib-grid .tg-cc.current{ background:var(--accent); }
-.tg-contrib-grid .tg-cc.relapse{ background:var(--danger); }
-.tg-contrib-grid .tg-cc.before-start{ background:transparent; border:1px dashed var(--border); }
-.tg-contrib-grid .tg-cc.future{ background:transparent; }
-.habit-card.terminated .tg-contrib-grid .tg-cc.current{ background:var(--text-dim); }
-.habit-card.terminated .tg-contrib-grid .tg-cc.clean{ background:var(--text-dim); opacity:.35; }
+.hl-contrib-top{ display:flex; gap:4px; }
+.hl-contrib-weekdays{ display:grid; grid-template-rows:repeat(7,1fr); width:16px; flex-shrink:0; margin-top:14px; font-size:8px; color:var(--text-dim); }
+.hl-contrib-weekdays span{ display:flex; align-items:center; }
+.hl-contrib-body{ flex:1; min-width:0; }
+.hl-contrib-months{ display:grid; grid-auto-flow:column; grid-auto-columns:1fr; height:12px; margin-bottom:2px; font-size:8px; color:var(--text-dim); }
+.hl-contrib-grid{ display:grid; grid-template-rows:repeat(7,1fr); grid-auto-flow:column; grid-auto-columns:1fr; gap:2px; }
+.hl-contrib.compact .hl-contrib-grid{ margin-top:12px; }
+.hl-contrib-grid .hl-cc{ aspect-ratio:1; border-radius:1px; background:var(--panel-alt); }
+.hl-contrib-grid .hl-cc.clean{ background:var(--accent); opacity:.35; }
+.hl-contrib-grid .hl-cc.current{ background:var(--accent); }
+.hl-contrib-grid .hl-cc.relapse{ background:var(--danger); }
+.hl-contrib-grid .hl-cc.before-start{ background:transparent; border:1px dashed var(--border); }
+.hl-contrib-grid .hl-cc.future{ background:transparent; }
+.habit-card.terminated .hl-contrib-grid .hl-cc.current{ background:var(--text-dim); }
+.habit-card.terminated .hl-contrib-grid .hl-cc.clean{ background:var(--text-dim); opacity:.35; }
 
 /* Read-only detail view (opened by tapping a card) */
-.tg-view-header{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-.tg-view-icon{ width:38px; height:38px; border-radius:50%; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--accent); flex-shrink:0; }
-.tg-view-titles{ flex:1; min-width:0; }
-.tg-view-name{ font-size:18px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.tg-view-sub{ font-size:12px; color:var(--text-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.tg-view-pills{ display:flex; align-items:center; gap:8px; margin-top:16px; }
-.tg-flame-pill{ display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--accent); background:var(--panel-alt); border:1px solid var(--border); border-radius:2px; padding:3px 8px; }
-.tg-view-pills .hc-settings-btn{ margin-left:auto; }
+.hl-view-header{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+.hl-view-icon{ width:38px; height:38px; border-radius:50%; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--accent); flex-shrink:0; }
+.hl-view-titles{ flex:1; min-width:0; }
+.hl-view-name{ font-size:18px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hl-view-sub{ font-size:12px; color:var(--text-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hl-view-pills{ display:flex; align-items:center; gap:8px; margin-top:16px; }
+.hl-flame-pill{ display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--accent); background:var(--panel-alt); border:1px solid var(--border); border-radius:2px; padding:3px 8px; }
+.hl-view-pills .hc-settings-btn{ margin-left:auto; }
 
 /* Calendar reused for read-only viewing: dot = clean day, filled = part
    of the current unbroken streak, red outline = a logged relapse. */
@@ -1135,11 +1143,36 @@ textarea.text-input{ resize:none; height:90px; font-family:inherit; }
 .relapse-detail-block .rd-label:first-child{ margin-top:0; }
 .relapse-detail-block .rd-text{ font-size:13px; line-height:1.5; white-space:pre-wrap; }
 
-.tg-status-badge{ display:inline-block; font-size:9px; letter-spacing:1px; font-weight:700; padding:3px 8px; border-radius:2px; margin-bottom:14px; }
-.tg-status-badge.active{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); }
+.hl-status-badge{ display:inline-block; font-size:9px; letter-spacing:1px; font-weight:700; padding:3px 8px; border-radius:2px; margin-bottom:14px; }
+.hl-status-badge.active{ background:var(--panel-alt); color:var(--accent); border:1px solid var(--accent); }
 /* "terminated" is FILLED accent (vs. "active"'s outline) so the two stay
    visually distinct without a fixed green fighting the selected theme. */
-.tg-status-badge.terminated{ background:var(--accent); color:#0B0E0C; }
+.hl-status-badge.terminated{ background:var(--accent); color:#0B0E0C; }
+
+/* =========================================================
+   TARGETS MODULE (goals.js) — the positive counterpart to Hit List
+   above: a target set on an existing task/workout streak rather than a
+   tracked thing of its own, so its card reuses .hc-settings-btn,
+   .status-badge, .readout-panel, .stepper, .preset-card and the other
+   already-shared components instead of redefining them.
+   ========================================================= */
+#targets-screen{ padding:14px 16px 40px; }
+.tgt-card{ display:flex; align-items:flex-start; gap:8px; width:100%; background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--radius); padding:14px 12px 14px 16px; margin-bottom:10px; }
+/* Everyday targets get the more prominent left edge — this is the "big
+   commitment" tier, it should read as a little more serious on sight. */
+.tgt-card.tgt-everyday{ border-left-width:4px; }
+.tgt-open{ flex:1; min-width:0; text-align:left; background:none; border:none; padding:0; }
+.tgt-top{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.tgt-icon{ width:32px; height:32px; border-radius:50%; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--accent); flex-shrink:0; }
+.tgt-body{ min-width:0; flex:1; }
+.tgt-name{ font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tgt-sub{ font-size:11px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px; }
+.tgt-hits{ opacity:.8; }
+.tgt-streak-pill{ font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--accent); flex-shrink:0; display:flex; align-items:baseline; gap:2px; }
+.tgt-streak-pill span{ font-size:9px; color:var(--text-dim); font-weight:600; }
+.tgt-fill-track{ height:6px; border-radius:3px; background:var(--panel-alt); overflow:hidden; margin-bottom:6px; }
+.tgt-fill-bar{ height:100%; background:var(--accent); border-radius:3px; transition:width .2s ease; }
+.tgt-fill-label{ font-size:10px; letter-spacing:.5px; color:var(--text-dim); font-family:var(--font-mono); }
 
 /* ===== WINS — category-colored left edge, same visual language as
    .assignment-card.overdue / .habit-card.terminated (colored left

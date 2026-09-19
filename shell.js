@@ -8,7 +8,7 @@
 "use strict";
 
 const el = (id) => document.getElementById(id);
-const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments", "view-targets", "view-missions", "view-wins", "view-profile"];
+const VIEWS = ["view-dashboard", "view-checklist", "view-workout", "view-assignments", "view-hitlist", "view-targets", "view-missions", "view-wins", "view-profile"];
 
 function showView(id) {
   VIEWS.forEach((v) => { el(v).hidden = v !== id; });
@@ -47,9 +47,13 @@ function refreshDashboard() {
     el("dash-assignments-sub").textContent = !nu ? "NONE ACTIVE"
       : nu.overdue ? "OVERDUE" : nu.dueDate ? "DUE " + fmtDateShort(nu.dueDate) : "NO DUE DATE";
   }
+  if (window.HitListData) {
+    el("dash-hitlist-stat").textContent = window.HitListData.bestStreak();
+    el("dash-hitlist-sub").textContent = window.HitListData.trackedCount() + " TRACKED";
+  }
   if (window.TargetsData) {
-    el("dash-targets-stat").textContent = window.TargetsData.bestStreak();
-    el("dash-targets-sub").textContent = window.TargetsData.trackedCount() + " TRACKED";
+    el("dash-targets-stat").textContent = window.TargetsData.activeCount();
+    el("dash-targets-sub").textContent = window.TargetsData.hitCount() + " HIT";
   }
   if (window.MissionsData) {
     const primary = window.MissionsData.getPrimaryMission();
@@ -363,6 +367,18 @@ function openAssignments() {
     console.error("Failed to open Assignments:", err);
   }
 }
+// Formerly "Targets" (habit elimination) — see targets.js's own header
+// comment for the rename.
+function openHitList() {
+  showView("view-hitlist");
+  try {
+    if (window.HitListData) window.HitListData.goHome();
+  } catch (err) {
+    console.error("Failed to open Hit List:", err);
+  }
+}
+// New Targets module (goals.js): streak-length/everyday targets on top of
+// existing task and workout streaks.
 function openTargets() {
   showView("view-targets");
   try {
@@ -401,6 +417,7 @@ window.openWinsFromProfile = openWins;
 el("tile-checklist").addEventListener("click", openChecklist);
 el("tile-workout").addEventListener("click", openWorkout);
 el("tile-assignments").addEventListener("click", openAssignments);
+el("tile-hitlist").addEventListener("click", openHitList);
 el("tile-targets").addEventListener("click", openTargets);
 el("tile-missions").addEventListener("click", openMissions);
 el("tile-wins").addEventListener("click", openWins);
@@ -422,8 +439,10 @@ const QUICK_ADD_MODULES = [
     icon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11M6.5 17.5h11M4 10v4M20 10v4M2 11v2M22 11v2M6.5 6.5v11M17.5 6.5v11"/></svg>' },
   { id: "assignments", label: "ASSIGNMENT", open: openAssignments, data: () => window.AssignmentsData,
     icon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>' },
-  { id: "targets", label: "TARGET", open: openTargets, data: () => window.TargetsData,
+  { id: "hitlist", label: "HIT LIST ENTRY", open: openHitList, data: () => window.HitListData,
     icon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>' },
+  { id: "targets", label: "TARGET", open: openTargets, data: () => window.TargetsData,
+    icon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V10M4 10l3-3 3 2 4-5 4 3M4 10V4"/><circle cx="18" cy="7" r="1.4" fill="currentColor" stroke="none"/></svg>' },
   { id: "missions", label: "MISSION", open: openMissions, data: () => window.MissionsData,
     icon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' },
   { id: "wins", label: "WIN", open: openWins, data: () => window.WinsData,
@@ -534,6 +553,7 @@ window.openMergedSettings = function () {
   if (window.ChecklistData) window.ChecklistData.populateSettings();
   if (window.WorkoutData) window.WorkoutData.populateSettings();
   if (window.AssignmentsData) window.AssignmentsData.populateSettings();
+  if (window.HitListData) window.HitListData.populateSettings();
   if (window.TargetsData) window.TargetsData.populateSettings();
   if (window.MissionsData) window.MissionsData.populateSettings();
   if (window.WinsData) window.WinsData.populateSettings();
@@ -575,6 +595,7 @@ el("btn-export").addEventListener("click", () => {
     checklist: window.ChecklistData ? window.ChecklistData.getState() : null,
     workout: window.WorkoutData ? window.WorkoutData.getState() : null,
     assignments: window.AssignmentsData ? window.AssignmentsData.getState() : null,
+    hitlist: window.HitListData ? window.HitListData.getState() : null,
     targets: window.TargetsData ? window.TargetsData.getState() : null,
     missions: window.MissionsData ? window.MissionsData.getState() : null,
     wins: window.WinsData ? window.WinsData.getState() : null,
@@ -602,7 +623,13 @@ el("file-import").addEventListener("change", (e) => {
         if (parsed.checklist && window.ChecklistData) window.ChecklistData.setState(parsed.checklist);
         if (parsed.workout && window.WorkoutData) window.WorkoutData.setState(parsed.workout);
         if (parsed.assignments && window.AssignmentsData) window.AssignmentsData.setState(parsed.assignments);
-        if (parsed.targets && window.TargetsData) window.TargetsData.setState(parsed.targets);
+        if (parsed.hitlist && window.HitListData) window.HitListData.setState(parsed.hitlist);
+        // A backup exported before the Targets rename/split still has its
+        // habit-elimination data under the old "targets" key — route it to
+        // Hit List (what it actually is) rather than the new Targets
+        // module, which wouldn't know what to do with a `habits` array.
+        if (parsed.targets && !parsed.hitlist && parsed.targets.habits && window.HitListData) window.HitListData.setState(parsed.targets);
+        else if (parsed.targets && window.TargetsData) window.TargetsData.setState(parsed.targets);
         if (parsed.missions && window.MissionsData) window.MissionsData.setState(parsed.missions);
         if (parsed.wins && window.WinsData) window.WinsData.setState(parsed.wins);
         if (parsed.gamification && window.GamificationData) window.GamificationData.setState(parsed.gamification);
@@ -624,10 +651,11 @@ el("file-import").addEventListener("change", (e) => {
 });
 
 el("btn-reset-all").addEventListener("click", () => {
-  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, assignments, targets, missions, wins, and your power level? This cannot be undone.")) {
+  if (confirm("Wipe ALL data — checklist tasks, streak history, workout logs, assignments, hit list, targets, missions, wins, and your power level? This cannot be undone.")) {
     if (window.ChecklistData) window.ChecklistData.wipe();
     if (window.WorkoutData) window.WorkoutData.wipe();
     if (window.AssignmentsData) window.AssignmentsData.wipe();
+    if (window.HitListData) window.HitListData.wipe();
     if (window.TargetsData) window.TargetsData.wipe();
     if (window.MissionsData) window.MissionsData.wipe();
     if (window.WinsData) window.WinsData.wipe();

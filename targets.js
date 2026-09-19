@@ -1,31 +1,70 @@
 /* =========================================================
-   TARGETS — targets.js
+   HIT LIST — targets.js
+   (File keeps its original name on disk — see checklist.js's own header,
+   which has said "app.js" for the same reason since before this module
+   existed — but everything user-facing now says "Hit List".)
+
    Habit elimination, tracked as the inverse of the Checklist streak:
    every day you don't log the habit is a day of progress; logging it
    resets the current streak. "Terminated" is derived live from the data
-   (current unbroken streak >= target), never stored, so a later relapse
+   (current unbroken streak >= goal), never stored, so a later relapse
    just flips it back without any state to reconcile. Own localStorage
    namespace, no cross-talk with any other module.
+
+   Formerly called "Targets" — renamed because a target is something you
+   aim for, not something you're trying to eliminate (see the new,
+   unrelated Targets module for the "aim for" meaning). STORAGE_KEY
+   changed accordingly; load() migrates any pre-existing data over from
+   the old key one time so nobody's habit history disappears.
    ========================================================= */
 
 (function () {
 "use strict";
 
-const STORAGE_KEY = "targets_state_v1";
+const STORAGE_KEY = "hitlist_state_v1";
+const LEGACY_STORAGE_KEY = "targets_state_v1";
 const MONTH_LABELS = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
 
 /* ---------- STATE ---------- */
 function defaultState() { return { habits: [] }; }
 let state = load();
 
+// One-time migration from the old "Targets" key/shape to the new "Hit
+// List" one — same data, just renamed (targetDays -> goalDays) so it
+// doesn't collide in meaning with the new, unrelated Targets module's own
+// targetDays. Runs at most once: after this, the new key exists and the
+// legacy key is removed, so later loads never touch this path again.
+function migrateLegacyState() {
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const habits = Array.isArray(parsed.habits) ? parsed.habits.map((h) => {
+      const migrated = Object.assign({}, h);
+      if (migrated.targetDays != null && migrated.goalDays == null) migrated.goalDays = migrated.targetDays;
+      delete migrated.targetDays;
+      return migrated;
+    }) : [];
+    const migrated = { habits };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return migrated;
+  } catch (e) {
+    console.error("Failed to migrate legacy Targets state to Hit List.", e);
+    return null;
+  }
+}
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
+    if (!raw) {
+      const migrated = migrateLegacyState();
+      return migrated ? { habits: migrated.habits } : defaultState();
+    }
     const parsed = JSON.parse(raw);
     return { habits: Array.isArray(parsed.habits) ? parsed.habits : [] };
   } catch (e) {
-    console.error("Failed to load targets state, resetting.", e);
+    console.error("Failed to load hit list state, resetting.", e);
     return defaultState();
   }
 }
@@ -80,7 +119,7 @@ function currentStreakDays(habit, today) {
   return Math.max(0, daysBetween(anchor, today));
 }
 function isTerminated(habit, today) {
-  return currentStreakDays(habit, today) >= habit.targetDays;
+  return currentStreakDays(habit, today) >= habit.goalDays;
 }
 function longestStreakDays(habit, today) {
   today = today || todayStr();
@@ -160,16 +199,16 @@ function contributionMonthLabels(cells, weeksCount) {
 }
 function contributionGridHTML(habit, weeksCount, today, compact) {
   const cells = contributionCells(habit, weeksCount, today);
-  const gridCells = cells.map((c) => `<div class="tg-cc ${c.state}" title="${c.date}"></div>`).join("");
-  const gridHTML = `<div class="tg-contrib-grid" style="grid-template-columns:repeat(${weeksCount},1fr);">${gridCells}</div>`;
-  if (compact) return `<div class="tg-contrib compact">${gridHTML}</div>`;
+  const gridCells = cells.map((c) => `<div class="hl-cc ${c.state}" title="${c.date}"></div>`).join("");
+  const gridHTML = `<div class="hl-contrib-grid" style="grid-template-columns:repeat(${weeksCount},1fr);">${gridCells}</div>`;
+  if (compact) return `<div class="hl-contrib compact">${gridHTML}</div>`;
   const monthsHTML = contributionMonthLabels(cells, weeksCount).map((m) => `<div>${m}</div>`).join("");
   const wdHTML = WEEKDAY_LABEL_COLS.map((w) => `<span>${w}</span>`).join("");
-  return `<div class="tg-contrib">
-    <div class="tg-contrib-top">
-      <div class="tg-contrib-weekdays">${wdHTML}</div>
-      <div class="tg-contrib-body">
-        <div class="tg-contrib-months" style="grid-template-columns:repeat(${weeksCount},1fr);">${monthsHTML}</div>
+  return `<div class="hl-contrib">
+    <div class="hl-contrib-top">
+      <div class="hl-contrib-weekdays">${wdHTML}</div>
+      <div class="hl-contrib-body">
+        <div class="hl-contrib-months" style="grid-template-columns:repeat(${weeksCount},1fr);">${monthsHTML}</div>
         ${gridHTML}
       </div>
     </div>
@@ -211,7 +250,7 @@ let tgCalView = new Date(); // start-date picker month cursor (edit screen)
 let tgDetailCalView = new Date(); // read-only streak calendar cursor (view screen)
 let relapseCalView = new Date();
 let relapseDate = null;     // selected date in the log-relapse sheet
-let relapseTargetValue = 90;
+let relapseGoalValue = 90;
 let expandedRelapseId = null;
 
 const el = (id) => document.getElementById(id);
@@ -227,19 +266,19 @@ function render() {
   try {
     html = screen === "edit" ? detailScreenHTML() : screen === "view" ? viewScreenHTML() : listScreenHTML();
   } catch (err) {
-    console.error("Targets render error:", err);
+    console.error("Hit List render error:", err);
     html = errorScreenHTML(err);
     hadError = true;
   }
-  el("targets-screen").innerHTML = html;
-  el("tg-top-strip").style.display = "flex";
+  el("hitlist-screen").innerHTML = html;
+  el("hl-top-strip").style.display = "flex";
 
   if (hadError) { attachErrorScreenHandlers(); return; }
   try {
     attachHandlers();
   } catch (err) {
-    console.error("Targets handler-wiring error:", err);
-    el("targets-screen").innerHTML = errorScreenHTML(err);
+    console.error("Hit List handler-wiring error:", err);
+    el("hitlist-screen").innerHTML = errorScreenHTML(err);
     attachErrorScreenHandlers();
   }
 }
@@ -248,16 +287,16 @@ function errorScreenHTML(err) {
   const stack = (err && err.stack) ? err.stack : "";
   return `<div class="wk-builder-panel" style="border-color:var(--danger);">
     <h1 class="screen-h1" style="color:var(--danger);">SOMETHING WENT WRONG</h1>
-    <p class="hint-text">The Targets screen hit an error. Your data is safe — nothing was deleted.</p>
+    <p class="hint-text">The Hit List screen hit an error. Your data is safe — nothing was deleted.</p>
     <label class="field-label">ERROR</label>
     <div class="text-input" style="white-space:pre-wrap; word-break:break-word; font-family:var(--font-mono); font-size:11px; user-select:text;">${escapeHTML(msg)}</div>
     ${stack ? `<label class="field-label">DETAILS</label>
     <div class="text-input" style="white-space:pre-wrap; word-break:break-word; font-family:var(--font-mono); font-size:10px; max-height:160px; overflow-y:auto; user-select:text;">${escapeHTML(stack)}</div>` : ""}
-    <button class="btn-primary" id="btn-tg-error-home">GO TO TARGETS HOME</button>
+    <button class="btn-primary" id="btn-hl-error-home">GO TO HIT LIST HOME</button>
   </div>`;
 }
 function attachErrorScreenHandlers() {
-  const btn = el("btn-tg-error-home");
+  const btn = el("btn-hl-error-home");
   if (btn) btn.onclick = () => { screen = null; editingId = null; draft = null; render(); };
 }
 
@@ -265,14 +304,14 @@ function attachErrorScreenHandlers() {
 function listScreenHTML() {
   const today = todayStr();
   const active = state.habits.filter((h) => !isTerminated(h, today))
-    .sort((a, b) => (currentStreakDays(b, today) / b.targetDays) - (currentStreakDays(a, today) / a.targetDays));
+    .sort((a, b) => (currentStreakDays(b, today) / b.goalDays) - (currentStreakDays(a, today) / a.goalDays));
   const terminated = state.habits.filter((h) => isTerminated(h, today))
     .sort((a, b) => currentStreakDays(b, today) - currentStreakDays(a, today));
 
   const readout = `
-    <div class="tg-readout-panel corner-bracket">
-      <div class="tg-readout-block"><div class="readout-label">ELIMINATING</div><div class="readout-value" style="font-size:26px;">${pad2(active.length)}</div></div>
-      <div class="tg-readout-block"><div class="readout-label">TERMINATED</div><div class="readout-value" style="font-size:26px;">${pad2(terminated.length)}</div></div>
+    <div class="hl-readout-panel corner-bracket">
+      <div class="hl-readout-block"><div class="readout-label">ELIMINATING</div><div class="readout-value" style="font-size:26px;">${pad2(active.length)}</div></div>
+      <div class="hl-readout-block"><div class="readout-label">TERMINATED</div><div class="readout-value" style="font-size:26px;">${pad2(terminated.length)}</div></div>
     </div>`;
 
   // Tapping the card opens a read-only view (name, description, heatmap,
@@ -284,7 +323,7 @@ function listScreenHTML() {
   const cardHTML = (h) => {
     const streak = currentStreakDays(h, today);
     const term = isTerminated(h, today);
-    const pct = term ? 100 : Math.min(100, Math.round((streak / Math.max(1, h.targetDays)) * 100));
+    const pct = term ? 100 : Math.min(100, Math.round((streak / Math.max(1, h.goalDays)) * 100));
     const heatmap = contributionGridHTML(h, 18, today, true);
     return `<div class="habit-card ${term ? "terminated" : ""}">
       <button class="hc-open" data-open-habit="${h.id}">
@@ -292,20 +331,20 @@ function listScreenHTML() {
           <div class="hc-icon">${targetIconSVG(18)}</div>
           <div class="hc-hero-body">
             <div class="hc-name">${escapeHTML(h.name)}</div>
-            <div class="hc-sub">${term ? "TERMINATED" : "TARGET " + h.targetDays + " DAYS"} <span class="hc-pct">· ${pct}% ELIMINATED</span></div>
+            <div class="hc-sub">${term ? "TERMINATED" : "GOAL " + h.goalDays + " DAYS"} <span class="hc-pct">· ${pct}% ELIMINATED</span></div>
           </div>
           <div class="hc-streak-pill">${streak}<span>D</span></div>
         </div>
         ${heatmap}
       </button>
-      <button class="hc-settings-btn" data-edit-habit="${h.id}" aria-label="Target settings">${penIconSVG(15)}</button>
+      <button class="hc-settings-btn" data-edit-habit="${h.id}" aria-label="Entry settings">${penIconSVG(15)}</button>
     </div>`;
   };
 
-  return `<h1 class="screen-h1">TARGETS</h1>
+  return `<h1 class="screen-h1">HIT LIST</h1>
     ${readout}
-    <button class="wk-dashed-card" style="width:100%; text-align:center; margin-bottom:18px;" id="btn-tg-new">+ ADD TARGET</button>
-    ${state.habits.length === 0 ? `<p class="hint-text" style="text-align:center; padding:30px 0;">No targets yet. Add one above.</p>` : ""}
+    <button class="wk-dashed-card" style="width:100%; text-align:center; margin-bottom:18px;" id="btn-hl-new">+ ADD TO HIT LIST</button>
+    ${state.habits.length === 0 ? `<p class="hint-text" style="text-align:center; padding:30px 0;">Nothing on your hit list yet. Add one above.</p>` : ""}
     ${active.length ? `<h2 class="group-title"><span class="tick"></span>ELIMINATING</h2>${active.map(cardHTML).join("")}` : ""}
     ${terminated.length ? `<h2 class="group-title muted" style="margin-top:22px;"><span class="tick"></span>TERMINATED</h2>${terminated.map(cardHTML).join("")}` : ""}`;
 }
@@ -323,27 +362,27 @@ function viewScreenHTML() {
   const heatmap = contributionGridHTML(h, 26, today, false);
 
   return `
-    <div class="tg-view-header">
-      <div class="tg-view-icon">${targetIconSVG(20)}</div>
-      <div class="tg-view-titles">
-        <div class="tg-view-name">${escapeHTML(h.name)}</div>
-        <div class="tg-view-sub">${h.reason ? escapeHTML(h.reason) : "No description"}</div>
+    <div class="hl-view-header">
+      <div class="hl-view-icon">${targetIconSVG(20)}</div>
+      <div class="hl-view-titles">
+        <div class="hl-view-name">${escapeHTML(h.name)}</div>
+        <div class="hl-view-sub">${h.reason ? escapeHTML(h.reason) : "No description"}</div>
       </div>
-      <button class="icon-btn" id="btn-tg-view-close" aria-label="Close">
+      <button class="icon-btn" id="btn-hl-view-close" aria-label="Close">
         <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M6.4 5L5 6.4L10.6 12L5 17.6L6.4 19L12 13.4L17.6 19L19 17.6L13.4 12L19 6.4L17.6 5L12 10.6z"/></svg>
       </button>
     </div>
     ${heatmap}
-    <div class="tg-view-pills">
-      <span class="tg-status-badge ${term ? "terminated" : "active"}" style="margin:0;">${term ? "TERMINATED" : "TARGET " + h.targetDays + "D"}</span>
-      <span class="tg-flame-pill">${flameIconSVG(13)}${streak}</span>
-      <button class="hc-settings-btn" id="btn-tg-view-edit" aria-label="Target settings">${penIconSVG(15)}</button>
+    <div class="hl-view-pills">
+      <span class="hl-status-badge ${term ? "terminated" : "active"}" style="margin:0;">${term ? "TERMINATED" : "GOAL " + h.goalDays + "D"}</span>
+      <span class="hl-flame-pill">${flameIconSVG(13)}${streak}</span>
+      <button class="hc-settings-btn" id="btn-hl-view-edit" aria-label="Entry settings">${penIconSVG(15)}</button>
     </div>
     <div class="calendar-panel corner-bracket" style="margin-top:16px;">
       <div class="cal-header">
-        <button type="button" id="tg-view-cal-prev" class="icon-btn small">‹</button>
+        <button type="button" id="hl-view-cal-prev" class="icon-btn small">‹</button>
         <div>${tgDetailCalView.toLocaleDateString("default", { month: "long", year: "numeric" }).toUpperCase()}</div>
-        <button type="button" id="tg-view-cal-next" class="icon-btn small">›</button>
+        <button type="button" id="hl-view-cal-next" class="icon-btn small">›</button>
       </div>
       <div class="cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
       <div class="cal-grid">${viewCalendarGridHTML(tgDetailCalView, h, today)}</div>
@@ -366,7 +405,7 @@ function calendarGridHTML(view, selectedDate) {
     if (ds === today) cls.push("today");
     if (ds === selectedDate) cls.push("selected");
     if (ds > today) cls.push("past"); // reuse dimming style for disallowed future dates
-    html += `<button type="button" data-tg-startdate="${ds}" class="${cls.join(" ")}" ${ds > today ? "disabled" : ""}>${d.getDate()}</button>`;
+    html += `<button type="button" data-hl-startdate="${ds}" class="${cls.join(" ")}" ${ds > today ? "disabled" : ""}>${d.getDate()}</button>`;
   }
   return html;
 }
@@ -397,47 +436,47 @@ function detailScreenHTML() {
 
   let actionHTML = "";
   if (isNew) {
-    actionHTML = `<button class="btn-primary" id="btn-tg-create">CREATE TARGET</button>`;
+    actionHTML = `<button class="btn-primary" id="btn-hl-create">ADD TO HIT LIST</button>`;
   } else {
-    actionHTML = `<button class="btn-secondary" id="btn-tg-log-relapse">LOG RELAPSE</button>
-      <button class="btn-danger-outline" id="btn-tg-delete">DELETE TARGET</button>`;
+    actionHTML = `<button class="btn-secondary" id="btn-hl-log-relapse">LOG RELAPSE</button>
+      <button class="btn-danger-outline" id="btn-hl-delete">REMOVE ENTRY</button>`;
   }
 
-  const statusBadge = isNew ? "" : `<span class="tg-status-badge ${term ? "terminated" : "active"}">${term ? "TERMINATED" : "ELIMINATING"}</span>`;
+  const statusBadge = isNew ? "" : `<span class="hl-status-badge ${term ? "terminated" : "active"}">${term ? "TERMINATED" : "ELIMINATING"}</span>`;
 
   const readoutBlock = isNew ? "" : `
     <div class="readout-panel corner-bracket" style="margin-bottom:18px;">
       <div class="readout-main">
         <div class="readout-block"><div class="readout-label">CURRENT STREAK</div><div class="readout-value">${streak}</div></div>
         <div class="readout-divider"></div>
-        <div class="readout-block"><div class="readout-label">TARGET</div><div class="readout-sub">${h.targetDays} DAYS</div><div class="hint-text" style="margin-top:4px;">BEST: ${longest}D</div></div>
+        <div class="readout-block"><div class="readout-label">GOAL</div><div class="readout-sub">${h.goalDays} DAYS</div><div class="hint-text" style="margin-top:4px;">BEST: ${longest}D</div></div>
       </div>
     </div>`;
 
   return `
-    ${screenHeaderHTML(isNew ? "NEW TARGET" : escapeHTML(h.name))}
+    ${screenHeaderHTML(isNew ? "NEW ENTRY" : escapeHTML(h.name))}
     ${statusBadge}
     ${readoutBlock}
     <label class="field-label" style="margin-top:0;">NAME</label>
-    <input type="text" class="text-input" id="tg-name" value="${escapeHTML(h.name)}" placeholder="e.g. Smoking">
+    <input type="text" class="text-input" id="hl-name" value="${escapeHTML(h.name)}" placeholder="e.g. Smoking">
 
     <label class="field-label">REASON — WHY GET RID OF IT?</label>
-    <textarea class="text-input" id="tg-reason" style="height:80px;" placeholder="What this is costing you, why it matters">${escapeHTML(h.reason || "")}</textarea>
+    <textarea class="text-input" id="hl-reason" style="height:80px;" placeholder="What this is costing you, why it matters">${escapeHTML(h.reason || "")}</textarea>
 
-    <label class="field-label">TARGET (DAYS)</label>
+    <label class="field-label">GOAL (DAYS)</label>
     <div class="stepper">
-      <button type="button" id="tg-target-minus">−</button>
-      <div class="stepper-value" id="tg-target-value">${h.targetDays}</div>
-      <button type="button" id="tg-target-plus">+</button>
+      <button type="button" id="hl-goal-minus">−</button>
+      <div class="stepper-value" id="hl-goal-value">${h.goalDays}</div>
+      <button type="button" id="hl-goal-plus">+</button>
     </div>
 
     ${!hasRelapses ? `
     <label class="field-label">START DATE</label>
     <div class="calendar-panel corner-bracket">
       <div class="cal-header">
-        <button type="button" id="tg-cal-prev" class="icon-btn small">‹</button>
+        <button type="button" id="hl-cal-prev" class="icon-btn small">‹</button>
         <div>${tgCalView.toLocaleDateString("default", { month: "long", year: "numeric" }).toUpperCase()}</div>
-        <button type="button" id="tg-cal-next" class="icon-btn small">›</button>
+        <button type="button" id="hl-cal-next" class="icon-btn small">›</button>
       </div>
       <div class="cal-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
       <div class="cal-grid">${calendarGridHTML(tgCalView, h.startDate)}</div>
@@ -450,7 +489,7 @@ function detailScreenHTML() {
 }
 function screenHeaderHTML(title) {
   return `<div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-    <button class="icon-btn" id="btn-tg-detail-back">
+    <button class="icon-btn" id="btn-hl-detail-back">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
     <h1 class="screen-h1" style="margin:0;">${title}</h1>
@@ -463,7 +502,7 @@ function attachHandlers() {
   if (screen === "view") { attachViewHandlers(); return; }
   document.querySelectorAll("[data-open-habit]").forEach((b) => b.onclick = () => openView(b.getAttribute("data-open-habit")));
   document.querySelectorAll("[data-edit-habit]").forEach((b) => b.onclick = () => openEdit(b.getAttribute("data-edit-habit")));
-  const newBtn = el("btn-tg-new");
+  const newBtn = el("btn-hl-new");
   if (newBtn) newBtn.onclick = () => openPresetSheet();
 }
 
@@ -471,15 +510,15 @@ function attachViewHandlers() {
   const h = currentHabit();
   if (!h) return;
 
-  const closeBtn = el("btn-tg-view-close");
+  const closeBtn = el("btn-hl-view-close");
   if (closeBtn) closeBtn.onclick = () => { screen = null; editingId = null; draft = null; render(); };
 
-  const editBtn = el("btn-tg-view-edit");
+  const editBtn = el("btn-hl-view-edit");
   if (editBtn) editBtn.onclick = () => openEdit(h.id);
 
-  const calPrev = el("tg-view-cal-prev");
+  const calPrev = el("hl-view-cal-prev");
   if (calPrev) calPrev.onclick = () => { tgDetailCalView.setMonth(tgDetailCalView.getMonth() - 1); render(); };
-  const calNext = el("tg-view-cal-next");
+  const calNext = el("hl-view-cal-next");
   if (calNext) calNext.onclick = () => { tgDetailCalView.setMonth(tgDetailCalView.getMonth() + 1); render(); };
 }
 
@@ -489,22 +528,22 @@ function attachDetailHandlers() {
   const isNew = !editingId;
   const commit = () => { if (!isNew) save(); };
 
-  const backBtn = el("btn-tg-detail-back");
+  const backBtn = el("btn-hl-detail-back");
   if (backBtn) backBtn.onclick = () => { screen = null; editingId = null; draft = null; render(); };
 
-  el("tg-name").onblur = (e) => { h.name = e.target.value; commit(); };
-  el("tg-reason").onblur = (e) => { h.reason = e.target.value; commit(); };
+  el("hl-name").onblur = (e) => { h.name = e.target.value; commit(); };
+  el("hl-reason").onblur = (e) => { h.reason = e.target.value; commit(); };
 
-  el("tg-target-minus").onclick = () => { h.targetDays = Math.max(1, h.targetDays - 1); commit(); el("tg-target-value").textContent = h.targetDays; };
-  el("tg-target-plus").onclick = () => { h.targetDays = h.targetDays + 1; commit(); el("tg-target-value").textContent = h.targetDays; };
+  el("hl-goal-minus").onclick = () => { h.goalDays = Math.max(1, h.goalDays - 1); commit(); el("hl-goal-value").textContent = h.goalDays; };
+  el("hl-goal-plus").onclick = () => { h.goalDays = h.goalDays + 1; commit(); el("hl-goal-value").textContent = h.goalDays; };
 
-  const calPrev = el("tg-cal-prev");
+  const calPrev = el("hl-cal-prev");
   if (calPrev) calPrev.onclick = () => { tgCalView.setMonth(tgCalView.getMonth() - 1); render(); };
-  const calNext = el("tg-cal-next");
+  const calNext = el("hl-cal-next");
   if (calNext) calNext.onclick = () => { tgCalView.setMonth(tgCalView.getMonth() + 1); render(); };
-  document.querySelectorAll("[data-tg-startdate]").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("[data-hl-startdate]").forEach((b) => b.onclick = () => {
     if (b.hasAttribute("disabled")) return;
-    h.startDate = b.getAttribute("data-tg-startdate"); commit(); render();
+    h.startDate = b.getAttribute("data-hl-startdate"); commit(); render();
   });
 
   document.querySelectorAll("[data-toggle-relapse]").forEach((b) => b.onclick = () => {
@@ -513,25 +552,25 @@ function attachDetailHandlers() {
     render();
   });
 
-  const createBtn = el("btn-tg-create");
+  const createBtn = el("btn-hl-create");
   if (createBtn) createBtn.onclick = () => {
-    const name = el("tg-name").value.trim();
-    if (!name) { flashInvalid(el("tg-name")); return; }
+    const name = el("hl-name").value.trim();
+    if (!name) { flashInvalid(el("hl-name")); return; }
     const record = {
-      id: uid(), name, reason: el("tg-reason").value, targetDays: h.targetDays || 90,
+      id: uid(), name, reason: el("hl-reason").value, goalDays: h.goalDays || 90,
       startDate: h.startDate || todayStr(), createdAt: new Date().toISOString(), relapses: []
     };
     state.habits.push(record);
     save();
     editingId = record.id; draft = null;
     render();
-    window.showToast && window.showToast("TARGET CREATED");
+    window.showToast && window.showToast("ADDED TO HIT LIST");
   };
 
-  const logRelapseBtn = el("btn-tg-log-relapse");
+  const logRelapseBtn = el("btn-hl-log-relapse");
   if (logRelapseBtn) logRelapseBtn.onclick = () => openRelapseSheet();
 
-  const deleteBtn = el("btn-tg-delete");
+  const deleteBtn = el("btn-hl-delete");
   if (deleteBtn) deleteBtn.onclick = () => {
     if (confirm(`Delete "${h.name}"? All history for it will be lost.`)) {
       state.habits = state.habits.filter((x) => x.id !== h.id);
@@ -566,19 +605,19 @@ function openEdit(habitId) {
 /* ---------- PRESET PICKER SHEET ---------- */
 function openSheet(id) { el(id).classList.add("open"); }
 function closeSheet(id) { el(id).classList.remove("open"); }
-function openPresetSheet() { openSheet("tg-preset-overlay"); }
+function openPresetSheet() { openSheet("hl-preset-overlay"); }
 function startDraft(name) {
-  closeSheet("tg-preset-overlay");
+  closeSheet("hl-preset-overlay");
   editingId = null;
-  draft = { name: name || "", reason: "", targetDays: 90, startDate: todayStr() };
+  draft = { name: name || "", reason: "", goalDays: 90, startDate: todayStr() };
   tgCalView = new Date();
   screen = "edit";
   render();
 }
 document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => startDraft(b.getAttribute("data-preset"))));
-el("btn-tg-preset-custom").addEventListener("click", () => startDraft(""));
-el("btn-close-tg-preset").addEventListener("click", () => closeSheet("tg-preset-overlay"));
-el("tg-preset-overlay").addEventListener("click", (e) => { if (e.target.id === "tg-preset-overlay") closeSheet("tg-preset-overlay"); });
+el("btn-hl-preset-custom").addEventListener("click", () => startDraft(""));
+el("btn-close-hl-preset").addEventListener("click", () => closeSheet("hl-preset-overlay"));
+el("hl-preset-overlay").addEventListener("click", (e) => { if (e.target.id === "hl-preset-overlay") closeSheet("hl-preset-overlay"); });
 
 /* ---------- LOG RELAPSE SHEET ---------- */
 function relapseCalendarGridHTML() {
@@ -600,8 +639,8 @@ function relapseCalendarGridHTML() {
   return html;
 }
 function renderRelapseCalendar() {
-  el("tg-relapse-cal-label").textContent = relapseCalView.toLocaleDateString("default", { month: "long", year: "numeric" }).toUpperCase();
-  el("tg-relapse-cal-grid").innerHTML = relapseCalendarGridHTML();
+  el("hl-relapse-cal-label").textContent = relapseCalView.toLocaleDateString("default", { month: "long", year: "numeric" }).toUpperCase();
+  el("hl-relapse-cal-grid").innerHTML = relapseCalendarGridHTML();
   document.querySelectorAll("[data-relapse-date]").forEach((b) => b.onclick = () => {
     if (b.hasAttribute("disabled")) return;
     relapseDate = b.getAttribute("data-relapse-date");
@@ -612,47 +651,47 @@ function openRelapseSheet() {
   const h = currentHabit();
   relapseDate = todayStr();
   relapseCalView = new Date();
-  relapseTargetValue = h.targetDays;
-  el("tg-relapse-trigger").value = "";
-  el("tg-relapse-adjustment").value = "";
-  el("tg-relapse-notes").value = "";
-  el("tg-relapse-target-value").textContent = relapseTargetValue;
+  relapseGoalValue = h.goalDays;
+  el("hl-relapse-trigger").value = "";
+  el("hl-relapse-adjustment").value = "";
+  el("hl-relapse-notes").value = "";
+  el("hl-relapse-goal-value").textContent = relapseGoalValue;
   renderRelapseCalendar();
-  openSheet("tg-relapse-overlay");
+  openSheet("hl-relapse-overlay");
 }
-el("tg-relapse-cal-prev").addEventListener("click", () => { relapseCalView.setMonth(relapseCalView.getMonth() - 1); renderRelapseCalendar(); });
-el("tg-relapse-cal-next").addEventListener("click", () => { relapseCalView.setMonth(relapseCalView.getMonth() + 1); renderRelapseCalendar(); });
-el("tg-relapse-target-minus").addEventListener("click", () => { relapseTargetValue = Math.max(1, relapseTargetValue - 1); el("tg-relapse-target-value").textContent = relapseTargetValue; });
-el("tg-relapse-target-plus").addEventListener("click", () => { relapseTargetValue = relapseTargetValue + 1; el("tg-relapse-target-value").textContent = relapseTargetValue; });
-el("btn-close-tg-relapse").addEventListener("click", () => closeSheet("tg-relapse-overlay"));
-el("tg-relapse-overlay").addEventListener("click", (e) => { if (e.target.id === "tg-relapse-overlay") closeSheet("tg-relapse-overlay"); });
-el("btn-tg-relapse-confirm").addEventListener("click", () => {
+el("hl-relapse-cal-prev").addEventListener("click", () => { relapseCalView.setMonth(relapseCalView.getMonth() - 1); renderRelapseCalendar(); });
+el("hl-relapse-cal-next").addEventListener("click", () => { relapseCalView.setMonth(relapseCalView.getMonth() + 1); renderRelapseCalendar(); });
+el("hl-relapse-goal-minus").addEventListener("click", () => { relapseGoalValue = Math.max(1, relapseGoalValue - 1); el("hl-relapse-goal-value").textContent = relapseGoalValue; });
+el("hl-relapse-goal-plus").addEventListener("click", () => { relapseGoalValue = relapseGoalValue + 1; el("hl-relapse-goal-value").textContent = relapseGoalValue; });
+el("btn-close-hl-relapse").addEventListener("click", () => closeSheet("hl-relapse-overlay"));
+el("hl-relapse-overlay").addEventListener("click", (e) => { if (e.target.id === "hl-relapse-overlay") closeSheet("hl-relapse-overlay"); });
+el("btn-hl-relapse-confirm").addEventListener("click", () => {
   const h = currentHabit();
-  if (!h || !editingId) { closeSheet("tg-relapse-overlay"); return; }
+  if (!h || !editingId) { closeSheet("hl-relapse-overlay"); return; }
   h.relapses = h.relapses || [];
   h.relapses.push({
     id: uid(), date: relapseDate || todayStr(),
-    trigger: el("tg-relapse-trigger").value,
-    adjustment: el("tg-relapse-adjustment").value,
-    notes: el("tg-relapse-notes").value,
+    trigger: el("hl-relapse-trigger").value,
+    adjustment: el("hl-relapse-adjustment").value,
+    notes: el("hl-relapse-notes").value,
     createdAt: new Date().toISOString()
   });
-  h.targetDays = relapseTargetValue;
+  h.goalDays = relapseGoalValue;
   save();
-  closeSheet("tg-relapse-overlay");
+  closeSheet("hl-relapse-overlay");
   render();
   window.showToast && window.showToast("LOGGED — BACK TO DAY 0");
 });
 
 /* ---------- TOP STRIP ---------- */
-el("btn-targets-back").addEventListener("click", () => window.goToDashboard());
-el("btn-targets-settings").addEventListener("click", () => window.openMergedSettings());
+el("btn-hitlist-back").addEventListener("click", () => window.goToDashboard());
+el("btn-hitlist-settings").addEventListener("click", () => window.openMergedSettings());
 
 /* ---------- PUBLIC INTERFACE ---------- */
-window.TargetsData = {
+window.HitListData = {
   getState: () => state,
   setState: (newState) => { state = newState; render(); },
-  wipe: () => { state = defaultState(); save(); render(); },
+  wipe: () => { state = defaultState(); save(); try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch (e) { /* ignore */ } render(); },
   populateSettings: () => {},
   trackedCount: () => state.habits.length,
   bestStreak: () => state.habits.reduce((max, h) => Math.max(max, currentStreakDays(h, todayStr())), 0),
@@ -666,7 +705,7 @@ window.TargetsData = {
   // habit that terminated and later relapsed keeps having earned this,
   // one-time, per the design (award once per habit, not once per day
   // it stays terminated).
-  terminatedCount: () => state.habits.filter((h) => longestStreakDays(h, todayStr()) >= h.targetDays).length
+  terminatedCount: () => state.habits.filter((h) => longestStreakDays(h, todayStr()) >= h.goalDays).length
 };
 
 /* ---------- INIT ---------- */
