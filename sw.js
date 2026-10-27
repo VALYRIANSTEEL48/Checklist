@@ -1,4 +1,4 @@
-const CACHE = "checklist-v26";
+const CACHE = "checklist-v27";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,6 +7,7 @@ const ASSETS = [
   "./workout.js",
   "./assignments.js",
   "./targets.js",
+  "./calendar.js",
   "./goals.js",
   "./missions.js",
   "./wins.js",

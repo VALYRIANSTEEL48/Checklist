@@ -341,6 +341,9 @@ function render() {
     `<div class="hb ${d.state}" title="${d.ds}"><span>${new Date(d.ds + "T12:00:00").getDate()}</span></div>`).join("");
 
   renderChecklist(today);
+  // Calendar tab (calendar.js, loaded after this file) mirrors task data;
+  // keep it in step with every list render.
+  if (window.CalendarPane) window.CalendarPane.refresh();
 }
 
 function pad3(n) { return String(n).padStart(3, "0"); }
@@ -407,6 +410,19 @@ function deleteGroup(groupId) {
   state.tasks.forEach((t) => { if (t.groupId === groupId) t.groupId = null; });
   save();
 }
+// Swap a group with its neighbour (dir -1 = up, +1 = down). Orders are
+// re-normalised to 0..n-1 first so groups created before this feature (or
+// with duplicate/missing order values) still move predictably.
+function moveGroup(groupId, dir) {
+  const sorted = state.groups.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  const i = sorted.findIndex((g) => g.id === groupId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= sorted.length) return;
+  const tmp = sorted[i]; sorted[i] = sorted[j]; sorted[j] = tmp;
+  sorted.forEach((g, idx) => { g.order = idx; });
+  save();
+  render();
+}
 function toggleGroupCollapsed(groupId) {
   const g = state.groups.find((x) => x.id === groupId);
   if (!g) return;
@@ -425,7 +441,9 @@ function renderChecklist(today) {
     if (t.recurrence === "repeating") {
       vis = isDueOn(t, today);
     } else if (t.timing === "scheduled") {
-      vis = t.date === today || (t.date < today && !isCompletedOn(t, t.date)) || t.date > today;
+      // A task scheduled for a FUTURE date stays off the list until that
+      // date arrives — it lives on the Calendar tab in the meantime.
+      vis = t.date === today || (t.date < today && !isCompletedOn(t, t.date));
     } else {
       // one-off anytime: show until completed
       const created = taskCreatedDateStr(t);
@@ -445,7 +463,7 @@ function renderChecklist(today) {
   });
 
   const groupsSorted = state.groups.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-  let html = groupsSorted.map((g) => groupBlockHTML(g, sortTasksForDisplay(byGroup.get(g.id) || [], today), today)).join("");
+  let html = groupsSorted.map((g, i) => groupBlockHTML(g, sortTasksForDisplay(byGroup.get(g.id) || [], today), today, i, groupsSorted.length)).join("");
   html += ungroupedBlockHTML(sortTasksForDisplay(byGroup.get("") || [], today), today);
 
   el("checklist-groups").innerHTML = html;
@@ -472,7 +490,7 @@ function sortTasksForDisplay(tasks, today) {
   return scheduled.concat(unscheduled);
 }
 
-function groupBlockHTML(g, tasks, today) {
+function groupBlockHTML(g, tasks, today, pos, total) {
   const itemsHTML = tasks.length
     ? tasks.map((t) => taskItemHTML(t, today)).join("")
     : `<li class="empty-note-inline">EMPTY — DRAG A TASK HERE</li>`;
@@ -482,6 +500,12 @@ function groupBlockHTML(g, tasks, today) {
         <svg class="tg-chevron ${g.collapsed ? "" : "open"}" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
       </button>
       <span class="tg-block-name">${escapeHTML(g.name)}</span>
+      <button class="tg-move-btn" data-move-group="${g.id}" data-dir="-1" aria-label="Move group up" ${pos === 0 ? "disabled" : ""}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+      <button class="tg-move-btn" data-move-group="${g.id}" data-dir="1" aria-label="Move group down" ${pos === total - 1 ? "disabled" : ""}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <button class="tg-delete-btn" data-delete-group="${g.id}" aria-label="Delete group">×</button>
     </div>
     <ul class="task-list tg-block-list" data-group-list="${g.id}" ${g.collapsed ? "hidden" : ""}>${itemsHTML}</ul>
@@ -499,6 +523,7 @@ function ungroupedBlockHTML(tasks, today) {
 
 function attachGroupHandlers() {
   document.querySelectorAll("[data-toggle-group]").forEach((b) => b.onclick = () => toggleGroupCollapsed(b.getAttribute("data-toggle-group")));
+  document.querySelectorAll("[data-move-group]").forEach((b) => b.onclick = () => moveGroup(b.getAttribute("data-move-group"), Number(b.getAttribute("data-dir"))));
   document.querySelectorAll("[data-delete-group]").forEach((b) => b.onclick = () => {
     const g = state.groups.find((x) => x.id === b.getAttribute("data-delete-group"));
     if (g && confirm(`Delete group "${g.name}"? Its tasks move back to the main list — nothing is deleted.`)) {
@@ -1022,6 +1047,20 @@ window.ChecklistData = {
   // Repeating tasks only — the ones a Target can actually be set on (a
   // one-off task has no meaningful streak, see computeTaskStats above).
   repeatingTasks: () => state.tasks.filter((t) => t.recurrence === "repeating" && !t.paused),
+  // For the Calendar tab (calendar.js): read-only views onto task data.
+  todayStr: () => getTrackingDateStr(),
+  openTask: (taskId) => openTaskSheet(taskId),
+  // Every scheduled (timed) task landing on dateStr: repeating ones on
+  // their due days, one-offs on their date. Paused tasks are omitted.
+  eventsForDate: (dateStr) => state.tasks
+    .filter((t) => !t.paused && t.timing === "scheduled" && t.time
+      && (t.recurrence === "repeating" ? isDueOn(t, dateStr) : t.date === dateStr))
+    .map((t) => ({
+      id: t.id, name: t.name, date: dateStr, time: t.time,
+      duration: t.duration || null,
+      done: isCompletedOn(t, dateStr),
+      repeating: t.recurrence === "repeating"
+    })),
   // Dashboard SITREP summary: today's due/done counts and the next
   // not-yet-done scheduled task (by time, falling back to the first
   // remaining task of any kind). Resolved on demand, nothing stored.
@@ -1069,23 +1108,29 @@ function addQuickTask() {
   const name = input.value.trim();
   if (!name) { flashInvalid(input); return; }
   const maxOrder = state.tasks.reduce((m, x) => Math.max(m, x.order || 0), 0);
-  state.tasks.push({
+  // On the Calendar tab a bare "anytime" task would never appear on the
+  // calendar, so it's created as a one-off scheduled for the day being
+  // viewed and its edit sheet opens straight away to set time/duration.
+  const cal = (window.CalendarPane && window.CalendarPane.isActive()) ? window.CalendarPane.quickAddDefaults() : null;
+  const task = {
     id: uid(),
     name,
     recurrence: "oneoff",
-    timing: "anytime",
+    timing: cal ? "scheduled" : "anytime",
     days: [],
-    time: null,
+    time: cal ? cal.time : null,
     duration: null,
-    date: null,
+    date: cal ? cal.date : null,
     createdAt: new Date().toISOString(),
     paused: false,
     order: maxOrder + 1,
     completions: {}
-  });
+  };
+  state.tasks.push(task);
   save();
   input.value = "";
   render();
+  if (cal) { openTaskSheet(task.id); return; }
   toast("TASK ADDED");
 }
 el("btn-quick-task-add").addEventListener("click", addQuickTask);

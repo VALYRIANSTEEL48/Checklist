@@ -84,6 +84,15 @@ straight to Profile.
   edit, pause, or delete it.
 - Drag the handle on the right of any **anytime** task to reorder it.
   Scheduled tasks always sort by time automatically.
+- Use the **up/down arrows** on a group's header to change group order.
+- A one-off task scheduled for a **future date** stays off the list until
+  that day; it shows on the **Calendar** tab meanwhile.
+- **List / Calendar tabs** sit under the new-task bar (tap or swipe sideways
+  to switch); the header above them stays pinned. The calendar has Day,
+  Week and Month views, shows every timed task, and tapping an event opens
+  its editor. Tasks can only be completed from the List tab. On the
+  Calendar tab, adding a task schedules it on the day you're viewing and
+  opens its edit sheet right away.
 
 **Workouts**
 - **Today** tab: if no program is active, this is the freeform view — weekly
